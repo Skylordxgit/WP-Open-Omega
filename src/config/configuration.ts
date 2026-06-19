@@ -117,4 +117,12 @@ export default () => ({
       endpoint: process.env.S3_ENDPOINT,
     },
   },
+
+  omega: {
+    defaultAdminEmail: process.env.OMEGA_ADMIN_EMAIL || 'admin@omega.local',
+    defaultAdminPassword: process.env.OMEGA_ADMIN_PASSWORD || 'ChangeMe123!',
+    defaultSupportEmail: process.env.OMEGA_SUPPORT_EMAIL || 'support@omega.local',
+    authSessionTtlHours: parseInt(process.env.OMEGA_AUTH_SESSION_TTL_HOURS || '12', 10),
+    openwaApiBaseUrl: process.env.OMEGA_OPENWA_API_BASE_URL || '/api',
+  },
 });

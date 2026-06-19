@@ -33,6 +33,7 @@ import { HooksModule } from './core/hooks';
 import { PluginsModule } from './core/plugins';
 import { PluginsApiModule } from './modules/plugins/plugins.module';
 import { ExtensionsModule } from './plugins/extensions/extensions.module';
+import { OmegaModule } from './modules/omega/omega.module';
 
 // Only import QueueModule if explicitly enabled to avoid Redis connection errors
 const queueModules: Array<Type | DynamicModule> = [];
@@ -91,6 +92,7 @@ if (dashboardServingEnabled && dashboardBuildPresent) {
           entities: [
             __dirname + '/modules/auth/**/*.entity{.ts,.js}',
             __dirname + '/modules/audit/**/*.entity{.ts,.js}',
+            __dirname + '/modules/omega/**/*.entity{.ts,.js}',
           ],
           // Dedicated migrations dir for the main connection only (must NOT run the
           // data-connection migrations, which target session/webhook/message tables).
@@ -218,6 +220,7 @@ if (dashboardServingEnabled && dashboardBuildPresent) {
     CatalogModule, // Phase 3: Catalog API (WhatsApp Business)
     PluginsApiModule, // Phase 5: Plugins API
     ExtensionsModule, // First-party extension plugins (registered disabled)
+    OmegaModule, // Omega SaaS super admin layer
     ...serveStaticModules, // Bundled dashboard SPA (production single-port setup)
   ],
 })

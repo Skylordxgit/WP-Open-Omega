@@ -4,7 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
 import { AuthService } from '../auth.service';
 import { ApiKeyRole } from '../entities/api-key.entity';
-import { REQUIRED_ROLE_KEY, PUBLIC_KEY } from '../decorators/auth.decorators';
+import { REQUIRED_ROLE_KEY, PUBLIC_KEY, SKIP_API_KEY_KEY } from '../decorators/auth.decorators';
 import { resolveClientIp } from '../../../common/utils/ip';
 
 @Injectable()
@@ -18,8 +18,12 @@ export class ApiKeyGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     // Check if route is marked as public
     const isPublic = this.reflector.getAllAndOverride<boolean>(PUBLIC_KEY, [context.getHandler(), context.getClass()]);
+    const skipApiKey = this.reflector.getAllAndOverride<boolean>(SKIP_API_KEY_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
 
-    if (isPublic) {
+    if (isPublic || skipApiKey) {
       return true;
     }
 

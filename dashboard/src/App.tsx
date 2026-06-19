@@ -7,6 +7,7 @@ import { ToastProvider } from './components/Toast';
 import { RoleProvider, useRole, type UserRole } from './hooks/useRole';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { API_BASE_URL } from './services/api';
+import { OmegaApp } from './omega/OmegaApp';
 import './App.css';
 
 const Login = lazy(() => import('./pages/Login').then(m => ({ default: m.Login })));
@@ -122,6 +123,10 @@ function AppContent() {
 }
 
 function App() {
+  if (window.location.pathname.startsWith('/omega')) {
+    return <OmegaApp />;
+  }
+
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>

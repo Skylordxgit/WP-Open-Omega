@@ -140,6 +140,24 @@ npm run dev
 # Swagger: http://localhost:2785/api/docs
 ```
 
+### Omega WA API Super Admin Panel
+
+Phase 1 adds a separate SaaS operations layer branded **Omega WA API** without changing the existing OpenWA technical dashboard.
+
+| Panel | URL | Intended users | Notes |
+| ----- | --- | -------------- | ----- |
+| Existing OpenWA Admin | `/` | Internal technical team | QR scanning, session creation, API keys, logs, plugins, infrastructure |
+| Omega Super Admin | `/omega` | Omega operations/admin team | SaaS clients, plans, usage, session assignment, staff |
+| Client SaaS Panel | _future phase_ | Paying clients | Not included in Phase 1 |
+
+Default seeded Omega logins come from env vars:
+
+```env
+OMEGA_ADMIN_EMAIL=admin@omega.local
+OMEGA_ADMIN_PASSWORD=ChangeMe123!
+OMEGA_SUPPORT_EMAIL=support@omega.local
+```
+
 ---
 
 ## 🔒 Security Architecture
@@ -256,6 +274,75 @@ curl -X POST http://localhost:2785/api/sessions/{sessionId}/messages/send-text \
     "text": "Hello from OpenWA!"
   }'
 ```
+
+---
+
+## 🧭 Omega SaaS Architecture
+
+Phase 1 introduces a backend and UI foundation for operating OpenWA as a SaaS product while leaving the current OpenWA admin surface available only for internal technical use.
+
+### Routing separation
+
+- Existing OpenWA Admin Panel remains at `/`
+- Existing OpenWA API remains under `/api/*`
+- Omega Super Admin Panel lives at `/omega/*`
+- Omega SaaS backend lives at `/api/omega/*`
+
+### Request flow
+
+```text
+Omega Super Admin Panel
+  -> Omega SaaS backend (/api/omega)
+  -> Existing OpenWA API (/api)
+  -> WhatsApp
+```
+
+### Phase 1 data foundation
+
+The Omega backend adds SaaS-oriented tables on the main database connection:
+
+- `omega_users`
+- `omega_clients`
+- `omega_plans`
+- `omega_whatsapp_sessions`
+- `omega_contacts`
+- `omega_contact_groups`
+- `omega_campaigns`
+- `omega_campaign_recipients`
+- `omega_messages`
+- `omega_usage_logs`
+- `omega_subscriptions`
+- `omega_auth_sessions`
+
+These tables are intentionally separate from the existing OpenWA operational tables so the technical dashboard and API behavior remain intact.
+
+### Security model
+
+- Existing OpenWA admin/API keeps the current API-key authentication flow
+- Omega uses its own bearer-token login under `/api/omega/auth/*`
+- OpenWA master credentials stay in backend environment variables only
+- The Omega frontend never receives the OpenWA master key
+- SaaS session assignment is enforced server-side so one mapped WhatsApp session belongs to only one client at a time
+
+### Phase 1 feature scope
+
+Included now:
+
+- Omega admin login
+- dashboard overview
+- clients list, create/edit, details
+- plans management
+- WhatsApp session assignment
+- usage monitoring
+- message limit visibility
+- admin users/staff management
+- settings/integration overview
+
+Deferred to later phases:
+
+- full campaign sending
+- final client self-service panel
+- live sync against real OpenWA sessions/messages instead of seeded mock/demo data
 
 ### Setup Webhook
 
