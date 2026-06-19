@@ -15,6 +15,8 @@ export function OmegaSettings() {
           <dl className="omega-definition-list">
             <div><dt>Omega API Namespace</dt><dd>{data!.architecture.omegaLayer}</dd></div>
             <div><dt>OpenWA API Base</dt><dd>{data!.architecture.openwaApiBaseUrl}</dd></div>
+            <div><dt>OpenWA Sync Base URL</dt><dd>{data!.architecture.openwaBaseUrl}</dd></div>
+            <div><dt>OpenWA HTTP Client Configured</dt><dd>{data!.architecture.openwaHttpClientConfigured ? 'Yes' : 'No (local service fallback)'}</dd></div>
             <div><dt>Master Key Stored Only in Backend</dt><dd>{data!.architecture.credentialsStoredInBackendOnly ? 'Yes' : 'No'}</dd></div>
             <div><dt>Existing OpenWA Admin Untouched</dt><dd>{data!.architecture.existingAdminPanelUntouched ? 'Yes' : 'No'}</dd></div>
           </dl>

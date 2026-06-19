@@ -10,6 +10,9 @@ export class OmegaWhatsappSession {
   @Column({ type: 'varchar', length: 120 })
   openwaSessionId: string;
 
+  @Column({ type: 'varchar', length: 160, nullable: true })
+  openwaSessionName: string | null;
+
   @Column({ type: 'varchar', length: 36, nullable: true })
   clientId: string | null;
 
@@ -22,8 +25,14 @@ export class OmegaWhatsappSession {
   @Column({ type: 'boolean', default: false })
   assignedToClient: boolean;
 
+  @Column({ type: 'boolean', default: false })
+  replacementRequested: boolean;
+
   @Column({ type: 'datetime', nullable: true })
   lastSeenAt: Date | null;
+
+  @Column({ type: 'datetime', nullable: true })
+  lastSyncAt: Date | null;
 
   @CreateDateColumn()
   createdAt: Date;

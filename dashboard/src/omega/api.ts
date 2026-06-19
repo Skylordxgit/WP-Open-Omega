@@ -47,28 +47,41 @@ export interface OmegaPlan {
 export interface OmegaSession {
   id: string;
   openwaSessionId: string;
+  openwaSessionName?: string | null;
   clientId?: string | null;
   companyName?: string | null;
   phoneNumber?: string | null;
-  status: 'connected' | 'disconnected' | 'needs_reconnect';
+  status: 'connected' | 'disconnected' | 'needs_reconnect' | 'starting' | 'qr_required';
   assignedToClient: boolean;
+  replacementRequested?: boolean;
   lastSeenAt?: string | null;
+  lastSyncAt?: string | null;
   createdAt: string;
 }
 
 export interface OmegaUsageOverview {
+  fallbackUsed: boolean;
   currentMonth: string;
-  totals: { messages: number; reconnections: number };
+  totals: { messagesToday: number; messagesThisMonth: number; reconnections: number };
   perClient: Array<{
     clientId: string;
     companyName: string;
     status: string;
-    messages: number;
+    messagesToday: number;
+    messagesThisMonth: number;
     monthlyMessageLimit: number;
     sessionCount: number;
     whatsappAccountLimit: number;
   }>;
   trend: Array<{ month: string; messages: number; reconnects: number }>;
+  bySession: Array<{
+    sessionId: string;
+    openwaSessionId: string;
+    openwaSessionName?: string | null;
+    clientId?: string | null;
+    messagesThisMonth: number;
+  }>;
+  byCampaign: Array<unknown>;
 }
 
 export interface OmegaDashboardSummary {
@@ -82,6 +95,7 @@ export interface OmegaDashboardSummary {
     connectedSessions: number;
     reconnectSessions: number;
     unassignedSessions: number;
+    messagesToday: number;
     messagesThisMonth: number;
     staffCount: number;
     contactCount: number;
@@ -89,10 +103,12 @@ export interface OmegaDashboardSummary {
     campaigns: number;
   };
   monthlyTrend: Array<{ month: string; messages: number; reconnects: number }>;
+  usageFallbackUsed?: boolean;
   topClients: Array<{ clientId: string; companyName: string; units: number }>;
   reconnectQueue: Array<{
     id: string;
     openwaSessionId: string;
+    openwaSessionName?: string | null;
     phoneNumber?: string | null;
     companyName?: string | null;
     lastSeenAt?: string | null;
@@ -110,6 +126,22 @@ export interface OmegaClientDetails extends OmegaClient {
   } | null;
   sessions: OmegaSession[];
   usageSummary: Array<{ month: string; messages: number; reconnects: number }>;
+  usageStats?: {
+    fallbackUsed: boolean;
+    messagesToday: number;
+    messagesThisMonth: number;
+    monthlyMessageLimit: number;
+    sessionCount: number;
+    whatsappAccountLimit: number;
+    trend: Array<{ month: string; messages: number }>;
+    bySession: Array<{
+      sessionId: string;
+      openwaSessionId: string;
+      openwaSessionName?: string | null;
+      messagesThisMonth: number;
+      status: string;
+    }>;
+  };
   staff: OmegaUser[];
   recentMessages: Array<{
     id: string;
@@ -129,6 +161,8 @@ export interface OmegaSettings {
   architecture: {
     omegaLayer: string;
     openwaApiBaseUrl: string;
+    openwaBaseUrl: string;
+    openwaHttpClientConfigured: boolean;
     openwaMasterKeyConfigured: boolean;
     credentialsStoredInBackendOnly: boolean;
     existingAdminPanelUntouched: boolean;
@@ -207,11 +241,17 @@ export async function omegaMe() {
 }
 
 export const omegaApi = {
+  me: omegaMe,
   dashboard: () => omegaFetch<OmegaDashboardSummary>('/admin/dashboard'),
-  usage: () => omegaFetch<OmegaUsageOverview>('/admin/usage'),
+  usage: () => omegaFetch<OmegaUsageOverview>('/usage'),
   settings: () => omegaFetch<OmegaSettings>('/admin/settings'),
   clients: () => omegaFetch<OmegaClient[]>('/clients'),
   client: (id: string) => omegaFetch<OmegaClientDetails>(`/clients/${id}`),
+  clientSessions: (clientId: string) => omegaFetch<OmegaSession[]>(`/clients/${clientId}/sessions`),
+  clientUsage: (clientId: string) =>
+    omegaFetch<OmegaClientDetails['usageStats'] & { trend: Array<{ month: string; messages: number }> }>(
+      `/clients/${clientId}/usage`,
+    ),
   createClient: (payload: Partial<OmegaClient>) =>
     omegaFetch<OmegaClientDetails>('/clients', { method: 'POST', body: JSON.stringify(payload) }),
   updateClient: (id: string, payload: Partial<OmegaClient>) =>
@@ -221,10 +261,22 @@ export const omegaApi = {
     omegaFetch<OmegaPlan>('/plans', { method: 'POST', body: JSON.stringify(payload) }),
   updatePlan: (id: string, payload: Partial<OmegaPlan>) =>
     omegaFetch<OmegaPlan>(`/plans/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
-  sessions: () => omegaFetch<OmegaSession[]>('/sessions'),
-  assignSession: (payload: { sessionId: string; clientId?: string | null }) =>
-    omegaFetch<OmegaSession>('/sessions/assign', { method: 'POST', body: JSON.stringify(payload) }),
-  syncMockSessions: () => omegaFetch<OmegaSession[]>('/sessions/mock-sync', { method: 'POST' }),
+  sessions: (filters?: { status?: string; clientId?: string }) => {
+    const params = new URLSearchParams();
+    if (filters?.status) params.set('status', filters.status);
+    if (filters?.clientId) params.set('clientId', filters.clientId);
+    const query = params.toString();
+    return omegaFetch<OmegaSession[]>(`/sessions${query ? `?${query}` : ''}`);
+  },
+  syncSessions: () => omegaFetch<OmegaSession[]>('/sessions/sync', { method: 'POST' }),
+  assignSession: (sessionId: string, payload: { clientId?: string | null; overrideLimit?: boolean }) =>
+    omegaFetch<OmegaSession>(`/sessions/${sessionId}/assign`, { method: 'POST', body: JSON.stringify(payload) }),
+  unassignSession: (sessionId: string) => omegaFetch<OmegaSession>(`/sessions/${sessionId}/unassign`, { method: 'POST' }),
+  updateReplacement: (sessionId: string, replacementRequested: boolean) =>
+    omegaFetch<OmegaSession>(`/sessions/${sessionId}/replacement`, {
+      method: 'PATCH',
+      body: JSON.stringify({ replacementRequested }),
+    }),
   users: () => omegaFetch<OmegaUser[]>('/users'),
   createUser: (payload: Record<string, unknown>) =>
     omegaFetch<OmegaUser>('/users', { method: 'POST', body: JSON.stringify(payload) }),

@@ -1,17 +1,18 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { SkipApiKeyAuth } from '../auth/decorators/auth.decorators';
-import { RequireOmegaRoles } from './decorators/omega-auth.decorators';
+import { CurrentOmegaUser, RequireOmegaRoles } from './decorators/omega-auth.decorators';
 import {
   AssignOmegaSessionDto,
   CreateOmegaClientDto,
   CreateOmegaPlanDto,
   CreateOmegaUserDto,
+  UpdateOmegaSessionReplacementDto,
   UpdateOmegaClientDto,
   UpdateOmegaPlanDto,
   UpdateOmegaUserDto,
 } from './dto';
-import { OmegaUserRole } from './entities';
+import { OmegaUser, OmegaUserRole } from './entities';
 import { OmegaAuthGuard } from './guards/omega-auth.guard';
 import { OmegaRolesGuard } from './guards/omega-roles.guard';
 import { OmegaAdminService } from './omega-admin.service';
@@ -29,7 +30,7 @@ export class OmegaAdminController {
     return this.omegaAdminService.getDashboardSummary();
   }
 
-  @Get('admin/usage')
+  @Get('usage')
   @RequireOmegaRoles(OmegaUserRole.SUPER_ADMIN, OmegaUserRole.SUPPORT_ADMIN)
   getUsage() {
     return this.omegaAdminService.getUsageOverview();
@@ -59,6 +60,18 @@ export class OmegaAdminController {
     return this.omegaAdminService.getClientById(id);
   }
 
+  @Get('clients/:clientId/sessions')
+  @RequireOmegaRoles(OmegaUserRole.SUPER_ADMIN, OmegaUserRole.SUPPORT_ADMIN)
+  getClientSessions(@Param('clientId') clientId: string) {
+    return this.omegaAdminService.getClientSessions(clientId);
+  }
+
+  @Get('clients/:clientId/usage')
+  @RequireOmegaRoles(OmegaUserRole.SUPER_ADMIN, OmegaUserRole.SUPPORT_ADMIN)
+  getClientUsage(@Param('clientId') clientId: string) {
+    return this.omegaAdminService.getClientUsage(clientId);
+  }
+
   @Patch('clients/:id')
   @RequireOmegaRoles(OmegaUserRole.SUPER_ADMIN, OmegaUserRole.SUPPORT_ADMIN)
   updateClient(@Param('id') id: string, @Body() dto: UpdateOmegaClientDto) {
@@ -85,20 +98,32 @@ export class OmegaAdminController {
 
   @Get('sessions')
   @RequireOmegaRoles(OmegaUserRole.SUPER_ADMIN, OmegaUserRole.SUPPORT_ADMIN)
-  listSessions() {
-    return this.omegaAdminService.listSessions();
+  listSessions(@Query('status') status?: string, @Query('clientId') clientId?: string) {
+    return this.omegaAdminService.listSessions({ status, clientId });
   }
 
-  @Post('sessions/assign')
+  @Post('sessions/sync')
   @RequireOmegaRoles(OmegaUserRole.SUPER_ADMIN, OmegaUserRole.SUPPORT_ADMIN)
-  assignSession(@Body() dto: AssignOmegaSessionDto) {
-    return this.omegaAdminService.assignSession(dto);
+  syncSessions() {
+    return this.omegaAdminService.syncSessions();
   }
 
-  @Post('sessions/mock-sync')
+  @Post('sessions/:id/assign')
   @RequireOmegaRoles(OmegaUserRole.SUPER_ADMIN, OmegaUserRole.SUPPORT_ADMIN)
-  syncMockSessions() {
-    return this.omegaAdminService.syncMockSessions();
+  assignSession(@Param('id') id: string, @Body() dto: AssignOmegaSessionDto, @CurrentOmegaUser() user: OmegaUser) {
+    return this.omegaAdminService.assignSession(id, dto, user.role);
+  }
+
+  @Post('sessions/:id/unassign')
+  @RequireOmegaRoles(OmegaUserRole.SUPER_ADMIN, OmegaUserRole.SUPPORT_ADMIN)
+  unassignSession(@Param('id') id: string) {
+    return this.omegaAdminService.unassignSession(id);
+  }
+
+  @Patch('sessions/:id/replacement')
+  @RequireOmegaRoles(OmegaUserRole.SUPER_ADMIN, OmegaUserRole.SUPPORT_ADMIN)
+  updateReplacement(@Param('id') id: string, @Body() dto: UpdateOmegaSessionReplacementDto) {
+    return this.omegaAdminService.updateReplacementFlag(id, dto.replacementRequested);
   }
 
   @Get('users')

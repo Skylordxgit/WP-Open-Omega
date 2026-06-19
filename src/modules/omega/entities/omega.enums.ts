@@ -20,6 +20,8 @@ export enum OmegaSessionStatus {
   CONNECTED = 'connected',
   DISCONNECTED = 'disconnected',
   NEEDS_RECONNECT = 'needs_reconnect',
+  STARTING = 'starting',
+  QR_REQUIRED = 'qr_required',
 }
 
 export enum OmegaSubscriptionStatus {

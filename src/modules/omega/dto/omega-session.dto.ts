@@ -1,10 +1,16 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsOptional, IsString } from 'class-validator';
 
 export class AssignOmegaSessionDto {
-  @IsString()
-  sessionId: string;
-
   @IsOptional()
   @IsString()
   clientId?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  overrideLimit?: boolean;
+}
+
+export class UpdateOmegaSessionReplacementDto {
+  @IsBoolean()
+  replacementRequested: boolean;
 }

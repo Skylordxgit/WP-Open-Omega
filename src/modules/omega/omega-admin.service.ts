@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -35,12 +35,16 @@ import {
   UpdateOmegaUserDto,
 } from './dto';
 import { OmegaAuthService } from './omega-auth.service';
+import { OpenwaApiClientService } from './openwa-api-client.service';
+import { OmegaUsageService } from './omega-usage.service';
 
 @Injectable()
 export class OmegaAdminService implements OnModuleInit {
   constructor(
     private readonly configService: ConfigService,
     private readonly omegaAuthService: OmegaAuthService,
+    private readonly openwaApiClientService: OpenwaApiClientService,
+    private readonly omegaUsageService: OmegaUsageService,
     @InjectRepository(OmegaClient, 'main')
     private readonly clientRepository: Repository<OmegaClient>,
     @InjectRepository(OmegaPlan, 'main')
@@ -70,41 +74,31 @@ export class OmegaAdminService implements OnModuleInit {
   async onModuleInit(): Promise<void> {
     await this.seedPlans();
     await this.seedDemoData();
+    await this.syncSessions().catch(() => {
+      // Avoid failing boot if OPENWA is not ready yet; the manual sync endpoint remains available.
+    });
   }
 
   async getDashboardSummary() {
-    const [clients, plans, sessions, usage, staff, campaigns, contacts, groups] = await Promise.all([
+    const [clients, plans, sessions, usageOverview, staff, campaigns, contacts, groups] = await Promise.all([
       this.clientRepository.find(),
       this.planRepository.find(),
-      this.sessionRepository.find(),
-      this.usageRepository.find(),
+      this.listSessionEntities(),
+      this.omegaUsageService.buildUsageOverview(await this.clientRepository.find(), await this.listSessionEntities()),
       this.userRepository.find(),
       this.campaignRepository.find(),
       this.contactRepository.find(),
       this.contactGroupRepository.find(),
     ]);
-
-    const currentMonth = this.currentMonth();
-    const currentUsage = usage.filter(entry => entry.periodMonth === currentMonth);
-    const messagesThisMonth = currentUsage
-      .filter(entry => entry.metricType === OmegaUsageMetricType.MESSAGES)
-      .reduce((sum, entry) => sum + entry.units, 0);
-
-    const monthlyTrend = this.buildMonthlyTrend(usage);
     const clientsById = new Map(clients.map(client => [client.id, client]));
-    const clientUsage = new Map<string, number>();
-    for (const entry of currentUsage) {
-      clientUsage.set(entry.clientId, (clientUsage.get(entry.clientId) ?? 0) + entry.units);
-    }
-
-    const topClients = Array.from(clientUsage.entries())
-      .map(([clientId, units]) => ({
-        clientId,
-        companyName: clientsById.get(clientId)?.companyName ?? 'Unknown client',
-        units,
-      }))
-      .sort((a, b) => b.units - a.units)
-      .slice(0, 5);
+    const topClients = [...usageOverview.perClient]
+      .sort((a, b) => b.messagesThisMonth - a.messagesThisMonth)
+      .slice(0, 5)
+      .map(client => ({
+        clientId: client.clientId,
+        companyName: client.companyName,
+        units: client.messagesThisMonth,
+      }));
 
     return {
       brandName: 'Omega WA API',
@@ -117,7 +111,8 @@ export class OmegaAdminService implements OnModuleInit {
         connectedSessions: sessions.filter(session => session.status === OmegaSessionStatus.CONNECTED).length,
         reconnectSessions: sessions.filter(session => session.status === OmegaSessionStatus.NEEDS_RECONNECT).length,
         unassignedSessions: sessions.filter(session => !session.clientId).length,
-        messagesThisMonth,
+        messagesThisMonth: usageOverview.totals.messagesThisMonth,
+        messagesToday: usageOverview.totals.messagesToday,
         staffCount: staff.filter(user =>
           [OmegaUserRole.SUPER_ADMIN, OmegaUserRole.SUPPORT_ADMIN].includes(user.role),
         ).length,
@@ -125,13 +120,15 @@ export class OmegaAdminService implements OnModuleInit {
         contactGroupCount: groups.length,
         campaigns: campaigns.length,
       },
-      monthlyTrend,
+      monthlyTrend: usageOverview.trend.map(point => ({ ...point, reconnects: 0 })),
+      usageFallbackUsed: usageOverview.fallbackUsed,
       topClients,
       reconnectQueue: sessions
         .filter(session => session.status === OmegaSessionStatus.NEEDS_RECONNECT)
         .map(session => ({
           id: session.id,
           openwaSessionId: session.openwaSessionId,
+          openwaSessionName: session.openwaSessionName,
           phoneNumber: session.phoneNumber,
           companyName: session.clientId ? clientsById.get(session.clientId)?.companyName ?? 'Unknown client' : null,
           lastSeenAt: session.lastSeenAt,
@@ -140,23 +137,21 @@ export class OmegaAdminService implements OnModuleInit {
   }
 
   async listClients() {
-    const [clients, plans, sessions, subscriptions, usage, users] = await Promise.all([
+    const [clients, plans, sessions, subscriptions, usageOverview, users] = await Promise.all([
       this.clientRepository.find({ order: { createdAt: 'DESC' } }),
       this.planRepository.find(),
-      this.sessionRepository.find(),
+      this.listSessionEntities(),
       this.subscriptionRepository.find(),
-      this.usageRepository.find(),
+      this.omegaUsageService.buildUsageOverview(await this.clientRepository.find(), await this.listSessionEntities()),
       this.userRepository.find(),
     ]);
-    const currentMonth = this.currentMonth();
 
     return clients.map(client => {
       const plan = plans.find(item => item.id === client.planId) ?? null;
       const clientSessions = sessions.filter(session => session.clientId === client.id);
       const subscription = subscriptions.find(item => item.clientId === client.id) ?? null;
-      const usageThisMonth = usage
-        .filter(entry => entry.clientId === client.id && entry.periodMonth === currentMonth)
-        .reduce((sum, entry) => sum + entry.units, 0);
+      const usageThisMonth =
+        usageOverview.perClient.find(entry => entry.clientId === client.id)?.messagesThisMonth ?? 0;
       const clientUsers = users.filter(user => user.clientId === client.id);
 
       return {
@@ -180,8 +175,8 @@ export class OmegaAdminService implements OnModuleInit {
     const [plan, subscription, sessions, usage, users, messages, contacts, contactGroups] = await Promise.all([
       client.planId ? this.planRepository.findOne({ where: { id: client.planId } }) : null,
       this.subscriptionRepository.findOne({ where: { clientId: client.id } }),
-      this.sessionRepository.find({ where: { clientId: client.id }, order: { createdAt: 'DESC' } }),
-      this.usageRepository.find({ where: { clientId: client.id }, order: { createdAt: 'DESC' } }),
+      this.getClientSessions(client.id),
+      this.getClientUsage(client.id),
       this.userRepository.find({ where: { clientId: client.id }, order: { createdAt: 'DESC' } }),
       this.messageRepository.find({ where: { clientId: client.id }, order: { createdAt: 'DESC' }, take: 10 }),
       this.contactRepository.find({ where: { clientId: client.id } }),
@@ -193,7 +188,8 @@ export class OmegaAdminService implements OnModuleInit {
       plan,
       subscription,
       sessions,
-      usageSummary: this.buildMonthlyTrend(usage).slice(-6),
+      usageSummary: usage.trend,
+      usageStats: usage,
       staff: users,
       recentMessages: messages,
       contactsCount: contacts.length,
@@ -291,9 +287,10 @@ export class OmegaAdminService implements OnModuleInit {
     return plan;
   }
 
-  async listSessions() {
+  async listSessions(filters: { status?: string; clientId?: string } = {}) {
+    await this.syncSessions();
     const clients = await this.clientRepository.find();
-    const sessions = await this.sessionRepository.find({ order: { createdAt: 'DESC' } });
+    const sessions = await this.listSessionEntities(filters);
     const clientsById = new Map(clients.map(client => [client.id, client]));
 
     return sessions.map(session => ({
@@ -302,29 +299,57 @@ export class OmegaAdminService implements OnModuleInit {
     }));
   }
 
-  async assignSession(dto: AssignOmegaSessionDto) {
-    const session = await this.sessionRepository.findOne({ where: { id: dto.sessionId } });
+  async assignSession(id: string, dto: AssignOmegaSessionDto, actorRole: OmegaUserRole) {
+    const session = await this.sessionRepository.findOne({ where: { id } });
     if (!session) {
       throw new NotFoundException('WhatsApp session not found');
     }
 
     if (!dto.clientId) {
-      session.clientId = null;
-      session.assignedToClient = false;
-      await this.sessionRepository.save(session);
-      return session;
+      throw new BadRequestException('clientId is required for assignment');
     }
 
     const client = await this.getClientEntity(dto.clientId);
     const clientSessions = await this.sessionRepository.find({ where: { clientId: client.id } });
-    if (clientSessions.length >= client.whatsappAccountLimit && session.clientId !== client.id) {
-      throw new BadRequestException('Client has reached the WhatsApp account limit for the current plan');
+    const isNewAssignment = session.clientId !== client.id;
+    if (clientSessions.length >= client.whatsappAccountLimit && isNewAssignment) {
+      if (dto.overrideLimit && actorRole !== OmegaUserRole.SUPER_ADMIN) {
+        throw new ForbiddenException('Only super_admin can override the WhatsApp account limit');
+      }
+      if (!dto.overrideLimit) {
+        throw new BadRequestException(
+          'Client has reached the WhatsApp account limit for the current plan. Super admin override is required.',
+        );
+      }
     }
 
     session.clientId = client.id;
     session.assignedToClient = true;
+    session.replacementRequested = false;
     await this.sessionRepository.save(session);
-    return session;
+    return this.decorateSession(session);
+  }
+
+  async unassignSession(id: string) {
+    const session = await this.sessionRepository.findOne({ where: { id } });
+    if (!session) {
+      throw new NotFoundException('WhatsApp session not found');
+    }
+
+    session.clientId = null;
+    session.assignedToClient = false;
+    await this.sessionRepository.save(session);
+    return this.decorateSession(session);
+  }
+
+  async updateReplacementFlag(id: string, replacementRequested: boolean) {
+    const session = await this.sessionRepository.findOne({ where: { id } });
+    if (!session) {
+      throw new NotFoundException('WhatsApp session not found');
+    }
+    session.replacementRequested = replacementRequested;
+    await this.sessionRepository.save(session);
+    return this.decorateSession(session);
   }
 
   async listUsers() {
@@ -383,39 +408,37 @@ export class OmegaAdminService implements OnModuleInit {
   }
 
   async getUsageOverview() {
-    const [clients, usage, sessions] = await Promise.all([
+    const [clients, sessions, usage, manualUsage] = await Promise.all([
       this.clientRepository.find(),
+      this.listSessionEntities(),
+      this.omegaUsageService.buildUsageOverview(await this.clientRepository.find(), await this.listSessionEntities()),
       this.usageRepository.find({ order: { createdAt: 'DESC' } }),
-      this.sessionRepository.find(),
     ]);
-    const currentMonth = this.currentMonth();
 
     return {
-      currentMonth,
+      currentMonth: usage.currentMonth,
+      fallbackUsed: usage.fallbackUsed,
       totals: {
-        messages: usage
-          .filter(entry => entry.periodMonth === currentMonth && entry.metricType === OmegaUsageMetricType.MESSAGES)
-          .reduce((sum, entry) => sum + entry.units, 0),
-        reconnections: usage
-          .filter(entry => entry.periodMonth === currentMonth && entry.metricType === OmegaUsageMetricType.RECONNECT)
+        messagesToday: usage.totals.messagesToday,
+        messagesThisMonth: usage.totals.messagesThisMonth,
+        reconnections: manualUsage
+          .filter(entry => entry.periodMonth === usage.currentMonth && entry.metricType === OmegaUsageMetricType.RECONNECT)
           .reduce((sum, entry) => sum + entry.units, 0),
       },
-      perClient: clients.map(client => {
-        const clientUsage = usage.filter(entry => entry.clientId === client.id && entry.periodMonth === currentMonth);
-        return {
-          clientId: client.id,
-          companyName: client.companyName,
-          status: client.status,
-          messages: clientUsage
-            .filter(entry => entry.metricType === OmegaUsageMetricType.MESSAGES)
-            .reduce((sum, entry) => sum + entry.units, 0),
-          monthlyMessageLimit: client.monthlyMessageLimit,
-          sessionCount: sessions.filter(session => session.clientId === client.id).length,
-          whatsappAccountLimit: client.whatsappAccountLimit,
-        };
-      }),
-      trend: this.buildMonthlyTrend(usage),
+      perClient: usage.perClient.map(client => ({
+        ...client,
+        sessionCount: sessions.filter(session => session.clientId === client.clientId).length,
+      })),
+      trend: usage.trend.map(point => ({ ...point, reconnects: 0 })),
+      bySession: usage.bySession,
+      byCampaign: usage.byCampaign,
     };
+  }
+
+  async getClientUsage(clientId: string) {
+    const client = await this.getClientEntity(clientId);
+    const sessions = await this.getClientSessionEntities(clientId);
+    return this.omegaUsageService.buildClientUsage(client, sessions);
   }
 
   async getSettings() {
@@ -430,6 +453,8 @@ export class OmegaAdminService implements OnModuleInit {
       architecture: {
         omegaLayer: '/api/omega',
         openwaApiBaseUrl: this.configService.get<string>('omega.openwaApiBaseUrl', '/api'),
+        openwaBaseUrl: this.configService.get<string>('openwa.baseUrl', 'http://localhost:2785'),
+        openwaHttpClientConfigured: !!this.configService.get<string>('openwa.apiKey'),
         openwaMasterKeyConfigured: !!process.env.API_MASTER_KEY,
         credentialsStoredInBackendOnly: true,
         existingAdminPanelUntouched: true,
@@ -447,30 +472,61 @@ export class OmegaAdminService implements OnModuleInit {
     };
   }
 
-  async syncMockSessions() {
-    const existing = await this.sessionRepository.count();
-    if (existing > 0) {
-      return this.listSessions();
+  async syncSessions() {
+    const snapshots = await this.openwaApiClientService.listSessions();
+    const existing = await this.sessionRepository.find();
+    const existingByOpenwaId = new Map(existing.map(session => [session.openwaSessionId, session]));
+    const now = new Date();
+
+    for (const snapshot of snapshots) {
+      const current = existingByOpenwaId.get(snapshot.openwaSessionId);
+      if (current) {
+        current.openwaSessionName = snapshot.openwaSessionName;
+        current.phoneNumber = snapshot.phoneNumber;
+        current.status = snapshot.status as OmegaSessionStatus;
+        current.lastSeenAt = snapshot.lastSeenAt;
+        current.lastSyncAt = now;
+        current.assignedToClient = !!current.clientId;
+        await this.sessionRepository.save(current);
+        existingByOpenwaId.delete(snapshot.openwaSessionId);
+        continue;
+      }
+
+      await this.sessionRepository.save(
+        this.sessionRepository.create({
+          openwaSessionId: snapshot.openwaSessionId,
+          openwaSessionName: snapshot.openwaSessionName,
+          phoneNumber: snapshot.phoneNumber,
+          status: snapshot.status as OmegaSessionStatus,
+          assignedToClient: false,
+          replacementRequested: false,
+          lastSeenAt: snapshot.lastSeenAt,
+          lastSyncAt: now,
+          createdAt: snapshot.createdAt,
+          updatedAt: snapshot.updatedAt,
+        }),
+      );
     }
 
-    await this.sessionRepository.save([
-      this.sessionRepository.create({
-        openwaSessionId: 'omega-alpha',
-        phoneNumber: '+1 202 555 0101',
-        status: OmegaSessionStatus.CONNECTED,
-        assignedToClient: false,
-        lastSeenAt: new Date(),
-      }),
-      this.sessionRepository.create({
-        openwaSessionId: 'omega-beta',
-        phoneNumber: '+1 202 555 0102',
-        status: OmegaSessionStatus.NEEDS_RECONNECT,
-        assignedToClient: false,
-        lastSeenAt: new Date(Date.now() - 1000 * 60 * 60 * 5),
-      }),
-    ]);
+    for (const stale of existingByOpenwaId.values()) {
+      stale.status = stale.clientId ? OmegaSessionStatus.NEEDS_RECONNECT : OmegaSessionStatus.DISCONNECTED;
+      stale.lastSyncAt = now;
+      await this.sessionRepository.save(stale);
+    }
 
-    return this.listSessions();
+    const sessions = await this.listSessionEntities();
+    const clients = await this.clientRepository.find();
+    const clientsById = new Map(clients.map(client => [client.id, client]));
+    return sessions.map(session => ({
+      ...session,
+      companyName: session.clientId ? clientsById.get(session.clientId)?.companyName ?? null : null,
+    }));
+  }
+
+  async getClientSessions(clientId: string) {
+    await this.getClientEntity(clientId);
+    const sessions = await this.getClientSessionEntities(clientId);
+    return Promise.all(sessions.map(session => this.decorateSession(session)));
   }
 
   private async seedPlans() {
@@ -557,40 +613,6 @@ export class OmegaAdminService implements OnModuleInit {
         monthlyMessageLimit: starter.monthlyMessageLimit,
         whatsappAccountLimit: starter.whatsappAccountLimit,
         startsAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 30),
-      }),
-    ]);
-
-    await this.sessionRepository.save([
-      this.sessionRepository.create({
-        openwaSessionId: 'northstar-sales',
-        clientId: firstClient.id,
-        phoneNumber: '+1 202 555 0101',
-        status: OmegaSessionStatus.CONNECTED,
-        assignedToClient: true,
-        lastSeenAt: new Date(),
-      }),
-      this.sessionRepository.create({
-        openwaSessionId: 'northstar-support',
-        clientId: firstClient.id,
-        phoneNumber: '+1 202 555 0104',
-        status: OmegaSessionStatus.NEEDS_RECONNECT,
-        assignedToClient: true,
-        lastSeenAt: new Date(Date.now() - 1000 * 60 * 60 * 12),
-      }),
-      this.sessionRepository.create({
-        openwaSessionId: 'bluepeak-main',
-        clientId: secondClient.id,
-        phoneNumber: '+1 202 555 0112',
-        status: OmegaSessionStatus.DISCONNECTED,
-        assignedToClient: true,
-        lastSeenAt: new Date(Date.now() - 1000 * 60 * 60 * 36),
-      }),
-      this.sessionRepository.create({
-        openwaSessionId: 'pool-unassigned-01',
-        phoneNumber: '+1 202 555 0199',
-        status: OmegaSessionStatus.CONNECTED,
-        assignedToClient: false,
-        lastSeenAt: new Date(),
       }),
     ]);
 
@@ -682,28 +704,7 @@ export class OmegaAdminService implements OnModuleInit {
       }),
     ]);
 
-    const months = this.lastSixMonths();
     const usageRows: OmegaUsageLog[] = [];
-    months.forEach((month, index) => {
-      usageRows.push(
-        this.usageRepository.create({
-          clientId: firstClient.id,
-          metricType: OmegaUsageMetricType.MESSAGES,
-          units: 6000 + index * 1200,
-          periodMonth: month,
-          metadata: { source: 'seed' },
-        }),
-      );
-      usageRows.push(
-        this.usageRepository.create({
-          clientId: secondClient.id,
-          metricType: OmegaUsageMetricType.MESSAGES,
-          units: 1500 + index * 400,
-          periodMonth: month,
-          metadata: { source: 'seed' },
-        }),
-      );
-    });
     usageRows.push(
       this.usageRepository.create({
         clientId: firstClient.id,
@@ -756,6 +757,27 @@ export class OmegaAdminService implements OnModuleInit {
       throw new NotFoundException('Client not found');
     }
     return client;
+  }
+
+  private async getClientSessionEntities(clientId: string) {
+    return this.sessionRepository.find({ where: { clientId }, order: { createdAt: 'DESC' } });
+  }
+
+  private async listSessionEntities(filters: { status?: string; clientId?: string } = {}) {
+    const sessions = await this.sessionRepository.find({ order: { createdAt: 'DESC' } });
+    return sessions.filter(session => {
+      if (filters.status && session.status !== filters.status) return false;
+      if (filters.clientId && session.clientId !== filters.clientId) return false;
+      return true;
+    });
+  }
+
+  private async decorateSession(session: OmegaWhatsappSession) {
+    const client = session.clientId ? await this.clientRepository.findOne({ where: { id: session.clientId } }) : null;
+    return {
+      ...session,
+      companyName: client?.companyName ?? null,
+    };
   }
 
   private currentMonth(date = new Date()): string {

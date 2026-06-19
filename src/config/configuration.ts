@@ -125,4 +125,9 @@ export default () => ({
     authSessionTtlHours: parseInt(process.env.OMEGA_AUTH_SESSION_TTL_HOURS || '12', 10),
     openwaApiBaseUrl: process.env.OMEGA_OPENWA_API_BASE_URL || '/api',
   },
+
+  openwa: {
+    baseUrl: process.env.OPENWA_BASE_URL || 'http://localhost:2785',
+    apiKey: process.env.OPENWA_API_KEY,
+  },
 });

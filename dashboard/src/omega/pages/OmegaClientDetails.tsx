@@ -5,6 +5,8 @@ import { omegaApi } from '../api';
 export function OmegaClientDetails() {
   const { id = '' } = useParams();
   const { data, isLoading, error } = useQuery({ queryKey: ['omega-client', id], queryFn: () => omegaApi.client(id) });
+  const { data: sessions = [] } = useQuery({ queryKey: ['omega-client-sessions', id], queryFn: () => omegaApi.clientSessions(id) });
+  const { data: usage } = useQuery({ queryKey: ['omega-client-usage', id], queryFn: () => omegaApi.clientUsage(id) });
 
   if (isLoading) return <div className="omega-card">Loading client details...</div>;
   if (error) return <div className="omega-inline-error">{(error as Error).message}</div>;
@@ -39,7 +41,7 @@ export function OmegaClientDetails() {
           <dl className="omega-definition-list">
             <div><dt>Contacts</dt><dd>{data!.contactsCount}</dd></div>
             <div><dt>Contact Groups</dt><dd>{data!.contactGroupsCount}</dd></div>
-            <div><dt>Assigned Sessions</dt><dd>{data!.sessions.length}</dd></div>
+            <div><dt>Assigned Sessions</dt><dd>{sessions.length}</dd></div>
             <div><dt>Client Staff</dt><dd>{data!.staff.length}</dd></div>
           </dl>
         </article>
@@ -54,11 +56,11 @@ export function OmegaClientDetails() {
             </div>
           </div>
           <div className="omega-list">
-            {data!.sessions.map(session => (
+            {sessions.map(session => (
               <div key={session.id} className="omega-list-item">
                 <div>
-                  <strong>{session.openwaSessionId}</strong>
-                  <p>{session.phoneNumber ?? 'No phone'}</p>
+                  <strong>{session.openwaSessionName ?? session.openwaSessionId}</strong>
+                  <p>{session.phoneNumber ?? 'No phone'}{session.lastSeenAt ? ` • ${new Date(session.lastSeenAt).toLocaleString()}` : ''}</p>
                 </div>
                 <span className={`omega-badge ${session.status === 'connected' ? 'success' : session.status === 'needs_reconnect' ? 'warning' : 'neutral'}`}>
                   {session.status}
@@ -93,12 +95,12 @@ export function OmegaClientDetails() {
         <div className="omega-card-header">
           <div>
             <h3>Recent Usage & Messages</h3>
-            <p>Previewing the monthly tracking and message history structure for Phase 2.</p>
+            <p>Live usage foundation based on assigned OpenWA sessions.</p>
           </div>
         </div>
         <div className="omega-grid omega-grid-two">
           <div className="omega-chart">
-            {data!.usageSummary.map(point => (
+            {(usage?.trend ?? data!.usageSummary).map(point => (
               <div key={point.month} className="omega-chart-row">
                 <span>{point.month}</span>
                 <div className="omega-chart-bar-wrap">
@@ -109,6 +111,26 @@ export function OmegaClientDetails() {
             ))}
           </div>
           <div className="omega-list">
+            {usage && (
+              <>
+                <div className="omega-list-item">
+                  <div>
+                    <strong>Messages Today</strong>
+                    <p>Current-day outbound traffic</p>
+                  </div>
+                  <span className="omega-badge neutral">{usage.messagesToday.toLocaleString()}</span>
+                </div>
+                <div className="omega-list-item">
+                  <div>
+                    <strong>Messages This Month</strong>
+                    <p>
+                      {usage.messagesThisMonth.toLocaleString()} / {usage.monthlyMessageLimit.toLocaleString()} plan limit
+                    </p>
+                  </div>
+                  <span className="omega-badge neutral">{usage.sessionCount} sessions tracked</span>
+                </div>
+              </>
+            )}
             {data!.recentMessages.map(message => (
               <div key={message.id} className="omega-list-item">
                 <div>

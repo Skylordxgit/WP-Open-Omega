@@ -14,7 +14,7 @@ export function OmegaDashboard() {
         {[
           ['Clients', stats.totalClients, `${stats.activeClients} active / ${stats.suspendedClients} suspended`],
           ['Sessions', stats.totalSessions, `${stats.connectedSessions} connected / ${stats.reconnectSessions} reconnect`],
-          ['Messages This Month', stats.messagesThisMonth.toLocaleString(), `${stats.unassignedSessions} unassigned sessions`],
+          ['Messages This Month', stats.messagesThisMonth.toLocaleString(), `${stats.messagesToday.toLocaleString()} sent today`],
           ['Admin Staff', stats.staffCount, `${stats.plans} plans configured`],
         ].map(([label, value, meta]) => (
           <article key={String(label)} className="omega-stat-card">
@@ -58,7 +58,7 @@ export function OmegaDashboard() {
             {data!.reconnectQueue.map(item => (
               <div key={item.id} className="omega-list-item">
                 <div>
-                  <strong>{item.openwaSessionId}</strong>
+                  <strong>{item.openwaSessionName ?? item.openwaSessionId}</strong>
                   <p>{item.companyName ?? 'Unassigned pool'}</p>
                 </div>
                 <span className="omega-badge warning">{item.phoneNumber ?? 'No phone'}</span>
@@ -67,6 +67,12 @@ export function OmegaDashboard() {
           </div>
         </article>
       </section>
+
+      {data!.usageFallbackUsed && (
+        <div className="omega-inline-error">
+          Usage is currently using fallback values. Configure live OpenWA sync and real traffic to remove fallback mode.
+        </div>
+      )}
 
       <section className="omega-card">
         <div className="omega-card-header">

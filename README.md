@@ -142,7 +142,7 @@ npm run dev
 
 ### Omega WA API Super Admin Panel
 
-Phase 1 adds a separate SaaS operations layer branded **Omega WA API** without changing the existing OpenWA technical dashboard.
+Phase 1 and Phase 2 add a separate SaaS operations layer branded **Omega WA API** without changing the existing OpenWA technical dashboard.
 
 | Panel | URL | Intended users | Notes |
 | ----- | --- | -------------- | ----- |
@@ -156,6 +156,13 @@ Default seeded Omega logins come from env vars:
 OMEGA_ADMIN_EMAIL=admin@omega.local
 OMEGA_ADMIN_PASSWORD=ChangeMe123!
 OMEGA_SUPPORT_EMAIL=support@omega.local
+```
+
+Phase 2 adds backend-only OpenWA sync configuration:
+
+```env
+OPENWA_BASE_URL=http://localhost:2785
+OPENWA_API_KEY=your_openwa_api_key_if_using_http_sync
 ```
 
 ---
@@ -316,12 +323,31 @@ The Omega backend adds SaaS-oriented tables on the main database connection:
 
 These tables are intentionally separate from the existing OpenWA operational tables so the technical dashboard and API behavior remain intact.
 
+### Phase 2 real session sync
+
+Phase 2 replaces the Omega mock session list with real OpenWA session synchronization.
+
+- `GET /api/omega/sessions` returns synced Omega session records
+- `POST /api/omega/sessions/sync` refreshes from the real OpenWA session system
+- `POST /api/omega/sessions/:id/assign` maps one synced session to one client
+- `POST /api/omega/sessions/:id/unassign` removes the client mapping
+- `GET /api/omega/usage` calculates real outbound usage from the existing OpenWA message store
+
+Session status mapping is normalized for Omega:
+
+- OpenWA `ready` -> Omega `connected`
+- OpenWA `initializing` / `authenticating` -> Omega `starting`
+- OpenWA `qr_ready` -> Omega `qr_required`
+- OpenWA `failed` -> Omega `needs_reconnect`
+- OpenWA `created` / `disconnected` -> Omega `disconnected`
+
 ### Security model
 
 - Existing OpenWA admin/API keeps the current API-key authentication flow
 - Omega uses its own bearer-token login under `/api/omega/auth/*`
 - OpenWA master credentials stay in backend environment variables only
 - The Omega frontend never receives the OpenWA master key
+- `OPENWA_API_KEY` is never sent to `/omega`; it is used only by the backend sync client
 - SaaS session assignment is enforced server-side so one mapped WhatsApp session belongs to only one client at a time
 
 ### Phase 1 feature scope
@@ -332,8 +358,8 @@ Included now:
 - dashboard overview
 - clients list, create/edit, details
 - plans management
-- WhatsApp session assignment
-- usage monitoring
+- real OpenWA session sync and assignment
+- usage monitoring from the OpenWA message store
 - message limit visibility
 - admin users/staff management
 - settings/integration overview
@@ -342,7 +368,62 @@ Deferred to later phases:
 
 - full campaign sending
 - final client self-service panel
-- live sync against real OpenWA sessions/messages instead of seeded mock/demo data
+- richer campaign-to-message attribution once campaign sending is implemented
+
+### Phase 2 setup checklist
+
+1. Keep the existing OpenWA admin dashboard on `/` unchanged.
+2. Set Omega admin env vars for the seeded super admin and support admin accounts.
+3. Configure real OpenWA sync:
+
+```env
+OPENWA_BASE_URL=http://localhost:2785
+OPENWA_API_KEY=your_existing_openwa_api_key
+```
+
+4. Start the app and sign in to `/omega`.
+5. Open the **WhatsApp Sessions** page and click **Refresh from OpenWA**.
+6. Assign synced sessions to clients from the session details modal.
+7. If a client already reached `whatsapp_account_limit`, only `super_admin` can override after confirmation.
+
+### How Omega connects to OpenWA
+
+There are two supported backend-only sync modes:
+
+1. HTTP sync mode
+   - Omega calls `OPENWA_BASE_URL/api/sessions`
+   - Request uses `OPENWA_API_KEY`
+   - Best when the Omega SaaS layer will later be split from the OpenWA runtime
+
+2. Local service fallback
+   - Used when `OPENWA_API_KEY` is not set
+   - Omega reads the in-process OpenWA session service directly
+   - Still keeps the existing `/` admin dashboard and API-key flow untouched
+
+### Manual sync and assignment example
+
+Sync sessions:
+
+```bash
+curl -X POST http://localhost:2785/api/omega/sessions/sync \
+  -H "Authorization: Bearer OMEGA_ADMIN_TOKEN"
+```
+
+Assign a synced session to a client:
+
+```bash
+curl -X POST http://localhost:2785/api/omega/sessions/{omegaSessionId}/assign \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer OMEGA_ADMIN_TOKEN" \
+  -d '{"clientId":"CLIENT_UUID"}'
+```
+
+Unassign a session:
+
+```bash
+curl -X POST http://localhost:2785/api/omega/sessions/{omegaSessionId}/unassign \
+  -H "Authorization: Bearer OMEGA_ADMIN_TOKEN"
+```
 
 ### Setup Webhook
 

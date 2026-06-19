@@ -16,8 +16,13 @@ export function OmegaUsage() {
           <small>Billing and quota tracking window</small>
         </article>
         <article className="omega-stat-card">
-          <span>Total Messages</span>
-          <strong>{data!.totals.messages.toLocaleString()}</strong>
+          <span>Messages Today</span>
+          <strong>{data!.totals.messagesToday.toLocaleString()}</strong>
+          <small>Real outbound traffic today</small>
+        </article>
+        <article className="omega-stat-card">
+          <span>Total Messages This Month</span>
+          <strong>{data!.totals.messagesThisMonth.toLocaleString()}</strong>
           <small>All client traffic for the month</small>
         </article>
         <article className="omega-stat-card">
@@ -55,13 +60,45 @@ export function OmegaUsage() {
                   </p>
                 </div>
                 <span className="omega-badge neutral">
-                  {client.messages.toLocaleString()} / {client.monthlyMessageLimit.toLocaleString()}
+                  {client.messagesThisMonth.toLocaleString()} / {client.monthlyMessageLimit.toLocaleString()}
                 </span>
               </div>
             ))}
           </div>
         </article>
       </section>
+
+      <section className="omega-card">
+        <div className="omega-card-header">
+          <div>
+            <h2>Per-Session Usage</h2>
+            <p>Current month outbound volume grouped by synced OpenWA session.</p>
+          </div>
+        </div>
+        <div className="omega-table">
+          <div className="omega-table-head omega-table-head-usage-session">
+            <span>Session</span>
+            <span>Client</span>
+            <span>Messages This Month</span>
+          </div>
+          {data!.bySession.map(session => (
+            <div key={session.sessionId} className="omega-table-row omega-table-head-usage-session">
+              <div>
+                <strong>{session.openwaSessionName ?? session.openwaSessionId}</strong>
+                <p>{session.openwaSessionId}</p>
+              </div>
+              <span>{data!.perClient.find(client => client.clientId === session.clientId)?.companyName ?? 'Unassigned'}</span>
+              <strong>{session.messagesThisMonth.toLocaleString()}</strong>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {data!.fallbackUsed && (
+        <div className="omega-inline-error">
+          Usage fallback mode is active because real synced traffic is not fully available yet.
+        </div>
+      )}
     </div>
   );
 }
