@@ -764,6 +764,59 @@ describe('SessionService', () => {
       expect(result).toEqual(chats);
     });
 
+    it('should fall back to stored messages when engine.getChats hangs or fails', async () => {
+      const session = createMockSession();
+      (repository.findOne as jest.Mock).mockResolvedValue(session);
+      (repository.update as jest.Mock).mockResolvedValue({ affected: 1 });
+      const createdAt = new Date('2026-06-19T08:00:00Z');
+
+      await service.start('sess-uuid-1');
+
+      mockEngine.getChats.mockRejectedValue(new Error('Timed out waiting for WhatsApp chat list'));
+      (messageRepository.find as jest.Mock).mockResolvedValue([
+        {
+          sessionId: 'sess-uuid-1',
+          chatId: '120363000@g.us',
+          body: 'Latest group message',
+          timestamp: 1700000100,
+          createdAt,
+        },
+        {
+          sessionId: 'sess-uuid-1',
+          chatId: '628123456789@c.us',
+          body: 'Hello',
+          timestamp: 1700000000,
+          createdAt: new Date('2026-06-19T07:59:00Z'),
+        },
+      ]);
+
+      const result = await service.getChats('sess-uuid-1');
+
+      expect(messageRepository.find).toHaveBeenCalledWith({
+        where: { sessionId: 'sess-uuid-1' },
+        order: { createdAt: 'DESC' },
+        take: 250,
+      });
+      expect(result).toEqual([
+        {
+          id: '120363000@g.us',
+          name: '120363000@g.us',
+          isGroup: true,
+          unreadCount: 0,
+          timestamp: 1700000100,
+          lastMessage: 'Latest group message',
+        },
+        {
+          id: '628123456789@c.us',
+          name: '628123456789@c.us',
+          isGroup: false,
+          unreadCount: 0,
+          timestamp: 1700000000,
+          lastMessage: 'Hello',
+        },
+      ]);
+    });
+
     it('should throw BadRequestException when session is not started', async () => {
       const session = createMockSession();
       (repository.findOne as jest.Mock).mockResolvedValue(session);

@@ -13,6 +13,12 @@ import {
   X,
   CornerUpLeft,
   Trash2,
+  ChevronDown,
+  Funnel,
+  ArrowUpDown,
+  Phone,
+  Wifi,
+  Clock3,
 } from 'lucide-react';
 import {
   sessionApi,
@@ -27,7 +33,6 @@ import { useWebSocket } from '../hooks/useWebSocket';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { useRole } from '../hooks/useRole';
 import { useToast } from '../components/Toast';
-import { PageHeader } from '../components/PageHeader';
 import './Chats.css';
 
 type MessageMedia = { mimetype: string; filename?: string; data?: string };
@@ -586,6 +591,10 @@ export function Chats() {
   };
 
   const formatLastMessageSnippet = (chat: Chat) => chat.lastMessage || '';
+  const selectedSession = sessions.find(session => session.id === selectedSessionId) || null;
+  const totalUnread = chats.reduce((sum, chat) => sum + (chat.unreadCount || 0), 0);
+  const directChats = chats.filter(chat => !chat.isGroup).length;
+  const groupChats = chats.filter(chat => chat.isGroup).length;
 
   const formatChatTime = (timestamp?: number) => {
     if (!timestamp) return '';
@@ -610,8 +619,6 @@ export function Chats() {
 
   return (
     <div className="chats-page">
-      <PageHeader title={t('nav.chats')} subtitle={t('chats.subtitle')} />
-
       {/* Real-time connection permanently dropped — let the user re-establish it instead of
           silently showing stale chats. */}
       {connectionFailed && (
@@ -642,12 +649,30 @@ export function Chats() {
         </div>
       ) : (
         <div className="chats-layout">
-          {/* LEFT SIDEBAR: session & chat rooms */}
-          <aside className="chats-sidebar">
-            <div className="sidebar-header-box">
-              {/* Session selector */}
-              <div className="session-select-group">
-                <label className="form-label">{t('chats.sessionLabel')}</label>
+          <aside className="chats-rail">
+            <div className="chats-rail-brand">
+              <div className="chats-rail-brand-icon">
+                <MessageSquare size={18} />
+              </div>
+              <div>
+                <div className="chats-rail-brand-title">Help Desk</div>
+                <div className="chats-rail-brand-subtitle">WhatsApp operator workspace</div>
+              </div>
+            </div>
+
+            <div className="chats-rail-group">
+              <div className="chats-rail-label">Active session</div>
+              <div className="chats-rail-card">
+                <div className="chats-rail-card-top">
+                  <div>
+                    <div className="chats-rail-card-title">{selectedSession?.name || 'Session'}</div>
+                    <div className="chats-rail-card-subtitle">{selectedSession?.phone || t('chats.noPhone')}</div>
+                  </div>
+                  <span className={`chats-session-badge ${isConnected ? 'online' : 'syncing'}`}>
+                    <Wifi size={12} />
+                    {isConnected ? 'Live' : 'Syncing'}
+                  </span>
+                </div>
                 <select
                   value={selectedSessionId}
                   onChange={e => setSelectedSessionId(e.target.value)}
@@ -660,8 +685,56 @@ export function Chats() {
                   ))}
                 </select>
               </div>
+            </div>
 
-              {/* Search bar */}
+            <div className="chats-rail-group">
+              <div className="chats-rail-label">Views</div>
+              <div className="chats-rail-nav">
+                <button type="button" className="chats-rail-nav-item active">
+                  <span className="chats-rail-nav-main">
+                    <MessageSquare size={18} />
+                    All
+                  </span>
+                  <span>{filteredChats.length}</span>
+                </button>
+                <button type="button" className="chats-rail-nav-item">
+                  <span className="chats-rail-nav-main">
+                    <Clock3 size={18} />
+                    Unread
+                  </span>
+                  <span>{totalUnread}</span>
+                </button>
+                <button type="button" className="chats-rail-nav-item">
+                  <span className="chats-rail-nav-main">
+                    <Phone size={18} />
+                    Direct
+                  </span>
+                  <span>{directChats}</span>
+                </button>
+                <button type="button" className="chats-rail-nav-item">
+                  <span className="chats-rail-nav-main">
+                    <Users size={18} />
+                    Groups
+                  </span>
+                  <span>{groupChats}</span>
+                </button>
+              </div>
+            </div>
+          </aside>
+
+          <section className="chats-inbox">
+            <div className="chats-inbox-header">
+              <div>
+                <div className="chats-inbox-title">{selectedSession?.name || 'Inbox'}</div>
+                <div className="chats-inbox-subtitle">{t('chats.subtitle')}</div>
+              </div>
+              <button type="button" className="chats-inbox-channel">
+                All channels
+                <ChevronDown size={16} />
+              </button>
+            </div>
+
+            <div className="chats-inbox-toolbar">
               <div className="chat-search-input">
                 <Search size={18} />
                 <input
@@ -671,9 +744,18 @@ export function Chats() {
                   onChange={e => setSearchQuery(e.target.value)}
                 />
               </div>
+              <button type="button" className="chats-toolbar-chip active">
+                Open
+              </button>
+              <button type="button" className="chats-toolbar-chip">
+                <ArrowUpDown size={15} />
+                Started first
+              </button>
+              <button type="button" className="chats-toolbar-icon" aria-label="Filters">
+                <Funnel size={16} />
+              </button>
             </div>
 
-            {/* Chat list */}
             <div className="chats-list">
               {loadingChats ? (
                 <div className="chats-list-loading">
@@ -682,6 +764,7 @@ export function Chats() {
                 </div>
               ) : filteredChats.length === 0 ? (
                 <div className="chats-list-empty">
+                  <MessageSquare size={40} className="placeholder-icon" />
                   <span>{t('chats.empty')}</span>
                 </div>
               ) : (
@@ -722,24 +805,30 @@ export function Chats() {
                 })
               )}
             </div>
-          </aside>
+          </section>
 
-          {/* RIGHT VIEW: active chat room */}
           <main className="chats-room">
             {activeChat ? (
               <div className="room-container">
-                {/* Room header */}
                 <header className="room-header">
-                  <div className="room-avatar">
-                    {activeChat.isGroup ? <Users size={20} /> : <User size={20} />}
+                  <div className="room-header-main">
+                    <div className="room-avatar">
+                      {activeChat.isGroup ? <Users size={20} /> : <User size={20} />}
+                    </div>
+                    <div className="room-contact-info">
+                      <h3>{activeChat.name || activeChat.id.split('@')[0]}</h3>
+                      <span>{activeChat.id}</span>
+                    </div>
                   </div>
-                  <div className="room-contact-info">
-                    <h3>{activeChat.name || activeChat.id.split('@')[0]}</h3>
-                    <span>{activeChat.id}</span>
+                  <div className="room-header-actions">
+                    <div className="room-header-pill">
+                      <Wifi size={14} />
+                      {isConnected ? 'Connected' : 'Waiting for sync'}
+                    </div>
+                    <div className="room-header-pill subtle">{activeChat.isGroup ? 'Group' : 'Direct'}</div>
                   </div>
                 </header>
 
-                {/* Messages body */}
                 <div className="room-messages">
                   {loadingMessages ? (
                     <div className="messages-loading">
@@ -1037,8 +1126,8 @@ export function Chats() {
             ) : (
               <div className="chats-room-placeholder">
                 <MessageSquare size={80} className="placeholder-icon" />
-                <h2>{t('chats.placeholderTitle')}</h2>
-                <p>{t('chats.placeholderDesc')}</p>
+                <h2>Select a conversation</h2>
+                <p>Pick a thread from the inbox to start replying, reviewing context, and handling WhatsApp chats faster.</p>
               </div>
             )}
           </main>

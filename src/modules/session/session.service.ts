@@ -41,6 +41,8 @@ interface ReconnectState {
 @Injectable()
 export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicationBootstrap {
   private readonly logger = createLogger('SessionService');
+  private static readonly CHAT_FETCH_TIMEOUT_MS = 15_000;
+  private static readonly CHAT_FALLBACK_MESSAGE_SCAN = 250;
 
   // In-memory map of active engine instances
   private engines: Map<string, IWhatsAppEngine> = new Map();
@@ -884,7 +886,50 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
       throw new BadRequestException('Session is not started');
     }
 
-    return engine.getChats();
+    try {
+      return await Promise.race([
+        engine.getChats(),
+        new Promise<ChatSummary[]>((_, reject) => {
+          setTimeout(() => reject(new Error('Timed out waiting for WhatsApp chat list')), SessionService.CHAT_FETCH_TIMEOUT_MS);
+        }),
+      ]);
+    } catch (error) {
+      this.logger.warn(`Live chat fetch failed for session ${id}; falling back to stored messages`, {
+        sessionId: id,
+        reason: error instanceof Error ? error.message : String(error),
+        action: 'get_chats_fallback',
+      });
+      return this.getChatsFromStoredMessages(id);
+    }
+  }
+
+  private async getChatsFromStoredMessages(sessionId: string): Promise<ChatSummary[]> {
+    const messages = await this.messageRepository.find({
+      where: { sessionId },
+      order: { createdAt: 'DESC' },
+      take: SessionService.CHAT_FALLBACK_MESSAGE_SCAN,
+    });
+
+    const chats = new Map<string, ChatSummary>();
+    for (const message of messages) {
+      if (!message.chatId || chats.has(message.chatId)) {
+        continue;
+      }
+
+      chats.set(message.chatId, {
+        id: message.chatId,
+        name: message.chatId,
+        isGroup: message.chatId.endsWith('@g.us'),
+        unreadCount: 0,
+        timestamp:
+          typeof message.timestamp === 'number' && Number.isFinite(message.timestamp)
+            ? message.timestamp
+            : Math.floor(message.createdAt.getTime() / 1000),
+        lastMessage: message.body || undefined,
+      });
+    }
+
+    return [...chats.values()].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
   }
 
   async sendSeen(id: string, chatId: string): Promise<boolean> {
