@@ -155,7 +155,7 @@ describe('WhatsAppWebJsAdapter.resolveContactPhone (@lid -> phone, #263)', () =>
   });
 });
 
-describe('resolveWebVersionPin (#251 — opt-in WA-Web version pin)', () => {
+describe('resolveWebVersionPin (#251 — default WA-Web version pin)', () => {
   const orig = { v: process.env.WWEBJS_WEB_VERSION, p: process.env.WWEBJS_WEB_VERSION_REMOTE_PATH };
   afterEach(() => {
     if (orig.v === undefined) delete process.env.WWEBJS_WEB_VERSION;
@@ -164,9 +164,18 @@ describe('resolveWebVersionPin (#251 — opt-in WA-Web version pin)', () => {
     else process.env.WWEBJS_WEB_VERSION_REMOTE_PATH = orig.p;
   });
 
-  it('returns undefined (default auto-version) when unset / "latest" / "off"', () => {
+  it('pins the default known-good WA Web version when unset', () => {
     delete process.env.WWEBJS_WEB_VERSION;
-    expect(resolveWebVersionPin()).toBeUndefined();
+    expect(resolveWebVersionPin()).toEqual({
+      webVersion: '2.3000.1023204257',
+      webVersionCache: {
+        type: 'remote',
+        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1023204257.html',
+      },
+    });
+  });
+
+  it('returns undefined (auto-version) when explicitly set to "latest" / "off"', () => {
     process.env.WWEBJS_WEB_VERSION = 'latest';
     expect(resolveWebVersionPin()).toBeUndefined();
     process.env.WWEBJS_WEB_VERSION = 'off';
