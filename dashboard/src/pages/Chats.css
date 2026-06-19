@@ -1,7 +1,8 @@
 .chats-page {
   padding: 1.5rem;
   width: 100%;
-  height: calc(100vh - 4rem);
+  height: calc(100dvh - 4rem);
+  min-height: 0;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
@@ -14,12 +15,13 @@
   display: grid;
   grid-template-columns: 280px 360px minmax(0, 1fr);
   flex: 1;
+  min-height: 0;
   background: rgba(255, 255, 255, 0.82);
   border: 1px solid var(--border);
   border-radius: 24px;
   overflow: hidden;
   box-shadow: 0 20px 45px rgba(15, 23, 42, 0.08);
-  height: calc(100vh - 8rem);
+  height: min(100%, calc(100dvh - 8rem));
   backdrop-filter: blur(18px);
 }
 
@@ -28,6 +30,9 @@
   display: flex;
   flex-direction: column;
   background: linear-gradient(180deg, #f8fbff 0%, #f1f6ff 100%);
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .chats-rail-brand {
@@ -36,6 +41,11 @@
   display: flex;
   align-items: center;
   gap: 0.875rem;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: linear-gradient(180deg, rgba(248, 251, 255, 0.98) 0%, rgba(241, 246, 255, 0.96) 100%);
+  backdrop-filter: blur(14px);
 }
 
 .chats-rail-brand-icon {
@@ -166,6 +176,8 @@
   display: flex;
   flex-direction: column;
   background: rgba(255, 255, 255, 0.66);
+  min-height: 0;
+  overflow: hidden;
 }
 
 .chats-inbox-header {
@@ -176,6 +188,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  flex-shrink: 0;
 }
 
 .chats-inbox-title {
@@ -209,6 +222,12 @@
   align-items: center;
   gap: 0.7rem;
   flex-wrap: wrap;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(14px);
 }
 
 .session-selector {
@@ -282,10 +301,12 @@
 
 .chats-list {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   padding: 0.65rem;
+  overscroll-behavior: contain;
 }
 
 /* Custom Scrollbar for chats list */
@@ -328,6 +349,7 @@
   transition: 0.18s ease;
   user-select: none;
   margin-bottom: 0.35rem;
+  background: rgba(255, 255, 255, 0.78);
 }
 
 .chat-item-card:hover {
@@ -338,6 +360,7 @@
 .chat-item-card.active {
   background: linear-gradient(135deg, rgba(37, 99, 235, 0.1), rgba(34, 197, 94, 0.08));
   border-color: rgba(37, 99, 235, 0.16);
+  box-shadow: 0 10px 20px rgba(37, 99, 235, 0.08);
 }
 
 .chat-avatar {
@@ -425,6 +448,8 @@
   display: flex;
   flex-direction: column;
   background: linear-gradient(180deg, rgba(248, 250, 252, 0.9), rgba(241, 245, 249, 0.95));
+  min-height: 0;
+  overflow: hidden;
 }
 
 .chats-room-placeholder {
@@ -462,6 +487,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-height: 0;
 }
 
 .room-header {
@@ -474,6 +500,7 @@
   justify-content: space-between;
   gap: 1rem;
   box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .room-header-main,
@@ -527,6 +554,7 @@
 
 .room-messages {
   flex: 1;
+  min-height: 0;
   padding: 1.5rem;
   overflow-y: auto;
   display: flex;
@@ -534,6 +562,8 @@
   gap: 0.75rem;
   background-image: radial-gradient(var(--border) 1px, transparent 0);
   background-size: 24px 24px;
+  overscroll-behavior: contain;
+  scroll-padding-bottom: 1rem;
 }
 
 .messages-loading {
@@ -636,6 +666,10 @@
   border-top: 1px solid var(--border);
   padding: 1rem 1.5rem;
   box-sizing: border-box;
+  flex-shrink: 0;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
 }
 
 .chats-page .input-form {
@@ -780,6 +814,7 @@
   align-items: center;
   gap: 1rem;
   box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .chats-page .preview-thumbnail {
@@ -848,6 +883,7 @@
   box-sizing: border-box;
   max-height: 120px;
   overflow-y: auto;
+  flex-shrink: 0;
 }
 
 .chats-page .emoji-grid {
@@ -884,13 +920,15 @@
    ============================================================================= */
 @media (max-width: 768px) {
   .chats-page {
-    padding: 1rem;
+    padding: 0.75rem;
     height: auto;
+    min-height: calc(100dvh - 4rem);
   }
   
   .chats-layout {
     grid-template-columns: 1fr;
     height: auto;
+    min-height: calc(100dvh - 5.5rem);
   }
 
   .chats-rail,
@@ -905,12 +943,12 @@
 
   .chats-inbox {
     order: 2;
-    min-height: 320px;
+    min-height: 280px;
   }
 
   .chats-room {
     order: 3;
-    min-height: 420px;
+    min-height: 50dvh;
   }
 
   .room-header {
@@ -918,6 +956,25 @@
     padding: 1rem;
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .chats-inbox-header {
+    padding: 1rem;
+  }
+
+  .chats-inbox-toolbar {
+    padding: 0.85rem 1rem;
+  }
+
+  .room-messages {
+    padding: 1rem;
+  }
+
+  .room-input-footer,
+  .attachment-preview-banner,
+  .chats-emoji-picker {
+    padding-left: 1rem;
+    padding-right: 1rem;
   }
 }
 
@@ -1159,6 +1216,7 @@
   justify-content: space-between;
   gap: 1rem;
   box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .replying-preview-content {
