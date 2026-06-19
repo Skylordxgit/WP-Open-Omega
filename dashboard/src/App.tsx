@@ -7,8 +7,25 @@ import { ToastProvider } from './components/Toast';
 import { RoleProvider, useRole, type UserRole } from './hooks/useRole';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { API_BASE_URL } from './services/api';
+import { ClientApp } from './client/ClientApp';
 import { OmegaApp } from './omega/OmegaApp';
 import './App.css';
+
+const OPENWA_API_KEY_STORAGE_KEY = 'openwa_api_key';
+
+function getStoredApiKey() {
+  return localStorage.getItem(OPENWA_API_KEY_STORAGE_KEY) || sessionStorage.getItem(OPENWA_API_KEY_STORAGE_KEY);
+}
+
+function persistApiKey(key: string) {
+  localStorage.setItem(OPENWA_API_KEY_STORAGE_KEY, key);
+  sessionStorage.setItem(OPENWA_API_KEY_STORAGE_KEY, key);
+}
+
+function clearStoredApiKey() {
+  localStorage.removeItem(OPENWA_API_KEY_STORAGE_KEY);
+  sessionStorage.removeItem(OPENWA_API_KEY_STORAGE_KEY);
+}
 
 const Login = lazy(() => import('./pages/Login').then(m => ({ default: m.Login })));
 const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
@@ -33,15 +50,14 @@ const queryClient = new QueryClient({
 });
 
 function AppContent() {
-  // Initialize from sessionStorage to avoid setState in effect
-  const savedKey = sessionStorage.getItem('openwa_api_key');
+  const savedKey = getStoredApiKey();
   const [isAuthenticated, setIsAuthenticated] = useState(!!savedKey);
   const [, setApiKey] = useState(savedKey || '');
   const { setRole, role } = useRole();
 
   const handleLogin = async (key: string) => {
     setApiKey(key);
-    sessionStorage.setItem('openwa_api_key', key);
+    persistApiKey(key);
 
     // Fetch the role from API
     try {
@@ -65,7 +81,7 @@ function AppContent() {
     setApiKey('');
     setIsAuthenticated(false);
     setRole(null);
-    sessionStorage.removeItem('openwa_api_key');
+    clearStoredApiKey();
   };
 
   // Re-validate and get role on mount if already authenticated
@@ -123,6 +139,10 @@ function AppContent() {
 }
 
 function App() {
+  if (window.location.pathname.startsWith('/app')) {
+    return <ClientApp />;
+  }
+
   if (window.location.pathname.startsWith('/omega')) {
     return <OmegaApp />;
   }

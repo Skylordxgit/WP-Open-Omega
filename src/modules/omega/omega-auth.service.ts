@@ -16,34 +16,21 @@ export class OmegaAuthService implements OnModuleInit {
   ) {}
 
   async onModuleInit(): Promise<void> {
-    const users = await this.userRepository.count();
-    if (users > 0) {
-      return;
-    }
-
     const email = this.configService.get<string>('omega.defaultAdminEmail', 'admin@omega.local');
     const password = this.configService.get<string>('omega.defaultAdminPassword', 'ChangeMe123!');
     const supportEmail = this.configService.get<string>('omega.defaultSupportEmail', 'support@omega.local');
-
-    await this.userRepository.save(
-      this.userRepository.create({
-        fullName: 'Omega Super Admin',
-        email,
-        passwordHash: this.hashPassword(password),
-        role: OmegaUserRole.SUPER_ADMIN,
-        status: OmegaUserStatus.ACTIVE,
-      }),
-    );
-
-    await this.userRepository.save(
-      this.userRepository.create({
-        fullName: 'Omega Support',
-        email: supportEmail,
-        passwordHash: this.hashPassword(password),
-        role: OmegaUserRole.SUPPORT_ADMIN,
-        status: OmegaUserStatus.ACTIVE,
-      }),
-    );
+    await this.ensureDefaultUser({
+      fullName: 'Omega Super Admin',
+      email,
+      password,
+      role: OmegaUserRole.SUPER_ADMIN,
+    });
+    await this.ensureDefaultUser({
+      fullName: 'Omega Support',
+      email: supportEmail,
+      password,
+      role: OmegaUserRole.SUPPORT_ADMIN,
+    });
   }
 
   async login(email: string, password: string): Promise<{ token: string; user: OmegaUser; expiresAt: Date }> {
@@ -116,5 +103,33 @@ export class OmegaAuthService implements OnModuleInit {
     const candidate = scryptSync(password, salt, 64);
     const stored = Buffer.from(hash, 'hex');
     return stored.length === candidate.length && timingSafeEqual(stored, candidate);
+  }
+
+  private async ensureDefaultUser({
+    fullName,
+    email,
+    password,
+    role,
+  }: {
+    fullName: string;
+    email: string;
+    password: string;
+    role: OmegaUserRole;
+  }): Promise<void> {
+    const normalizedEmail = email.toLowerCase();
+    const existing = await this.userRepository.findOne({ where: { email: normalizedEmail } });
+    if (existing) {
+      return;
+    }
+
+    await this.userRepository.save(
+      this.userRepository.create({
+        fullName,
+        email: normalizedEmail,
+        passwordHash: this.hashPassword(password),
+        role,
+        status: OmegaUserStatus.ACTIVE,
+      }),
+    );
   }
 }

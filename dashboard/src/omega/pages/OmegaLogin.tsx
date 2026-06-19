@@ -5,8 +5,8 @@ interface OmegaLoginProps {
 }
 
 export function OmegaLogin({ onLogin }: OmegaLoginProps) {
-  const [email, setEmail] = useState('admin@omega.local');
-  const [password, setPassword] = useState('ChangeMe123!');
+  const [email, setEmail] = useState('admin@omegaxmeta.agency');
+  const [password, setPassword] = useState('Omegaxmeta@321');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 

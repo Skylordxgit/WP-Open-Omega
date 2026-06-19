@@ -267,8 +267,7 @@ export interface Settings {
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
 
-  // Get API key from sessionStorage for authentication
-  const apiKey = sessionStorage.getItem('openwa_api_key');
+  const apiKey = localStorage.getItem('openwa_api_key') || sessionStorage.getItem('openwa_api_key');
 
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
@@ -281,6 +280,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   if (response.status === 401) {
     // The stored API key is invalid/expired/revoked — clear it and return to login
     // so the user isn't stuck on a dashboard that 401s every request.
+    localStorage.removeItem('openwa_api_key');
     sessionStorage.removeItem('openwa_api_key');
     if (typeof window !== 'undefined') {
       window.location.assign('/');
