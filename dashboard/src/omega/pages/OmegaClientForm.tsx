@@ -57,7 +57,7 @@ export function OmegaClientForm() {
     onSuccess: result => {
       void queryClient.invalidateQueries({ queryKey: ['omega-clients'] });
       void queryClient.invalidateQueries({ queryKey: ['omega-dashboard'] });
-      navigate(`/omega/clients/${result.id}`);
+      navigate(`/clients/${result.id}`);
     },
   });
 
@@ -68,7 +68,7 @@ export function OmegaClientForm() {
           <h2>{isEdit ? 'Edit Client' : 'Add Client'}</h2>
           <p>Configure company ownership, subscription limits, and current SaaS status.</p>
         </div>
-        <Link className="omega-ghost-button" to="/omega/clients">
+        <Link className="omega-ghost-button" to="/clients">
           Back to Clients
         </Link>
       </div>

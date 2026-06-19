@@ -15,7 +15,7 @@ export function OmegaClients() {
           <h2>Clients</h2>
           <p>Create and manage SaaS tenants without exposing the OpenWA technical console.</p>
         </div>
-        <Link className="omega-primary-button" to="/omega/clients/new">
+        <Link className="omega-primary-button" to="/clients/new">
           Add Client
         </Link>
       </div>
@@ -45,8 +45,8 @@ export function OmegaClients() {
               </span>
               <span className={`omega-badge ${client.status === 'active' ? 'success' : 'danger'}`}>{client.status}</span>
               <div className="omega-table-actions">
-                <Link to={`/omega/clients/${client.id}`}>Details</Link>
-                <Link to={`/omega/clients/${client.id}/edit`}>Edit</Link>
+                <Link to={`/clients/${client.id}`}>Details</Link>
+                <Link to={`/clients/${client.id}/edit`}>Edit</Link>
               </div>
             </div>
           ))}

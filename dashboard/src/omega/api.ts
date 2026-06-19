@@ -180,6 +180,7 @@ export interface OmegaSettings {
 }
 
 const OMEGA_TOKEN_KEY = 'omega_admin_token';
+const OPENWA_API_KEY_STORAGE_KEY = 'openwa_api_key';
 
 export function getOmegaToken() {
   return sessionStorage.getItem(OMEGA_TOKEN_KEY);
@@ -193,6 +194,10 @@ export function clearOmegaToken() {
   sessionStorage.removeItem(OMEGA_TOKEN_KEY);
 }
 
+function getOpenwaApiKey() {
+  return localStorage.getItem(OPENWA_API_KEY_STORAGE_KEY) || sessionStorage.getItem(OPENWA_API_KEY_STORAGE_KEY);
+}
+
 async function parseJson(response: Response) {
   if (response.status === 204) {
     return null;
@@ -202,11 +207,13 @@ async function parseJson(response: Response) {
 
 async function omegaFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getOmegaToken();
+  const openwaApiKey = getOpenwaApiKey();
   const response = await fetch(`${API_BASE_URL}/omega${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(!token && openwaApiKey ? { 'X-API-Key': openwaApiKey } : {}),
       ...(init?.headers ?? {}),
     },
   });

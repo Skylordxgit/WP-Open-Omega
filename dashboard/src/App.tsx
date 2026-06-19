@@ -8,8 +8,8 @@ import { RoleProvider, useRole, type UserRole } from './hooks/useRole';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { API_BASE_URL } from './services/api';
 import { ClientApp } from './client/ClientApp';
-import { OmegaApp } from './omega/OmegaApp';
 import './App.css';
+import './omega/styles/omega.css';
 
 const OPENWA_API_KEY_STORAGE_KEY = 'openwa_api_key';
 
@@ -38,6 +38,11 @@ const ApiKeys = lazy(() => import('./pages/ApiKeys').then(m => ({ default: m.Api
 const MessageTester = lazy(() => import('./pages/MessageTester').then(m => ({ default: m.MessageTester })));
 const Infrastructure = lazy(() => import('./pages/Infrastructure').then(m => ({ default: m.Infrastructure })));
 const Plugins = lazy(() => import('./pages/Plugins'));
+const OmegaClients = lazy(() => import('./omega/pages/OmegaClients').then(m => ({ default: m.OmegaClients })));
+const OmegaClientForm = lazy(() => import('./omega/pages/OmegaClientForm').then(m => ({ default: m.OmegaClientForm })));
+const OmegaClientDetails = lazy(() => import('./omega/pages/OmegaClientDetails').then(m => ({ default: m.OmegaClientDetails })));
+const OmegaPlans = lazy(() => import('./omega/pages/OmegaPlans').then(m => ({ default: m.OmegaPlans })));
+const OmegaStaff = lazy(() => import('./omega/pages/OmegaStaff').then(m => ({ default: m.OmegaStaff })));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -125,6 +130,12 @@ function AppContent() {
             <Route path="webhooks" element={<Webhooks />} />
             <Route path="templates" element={<Templates />} />
             {role === 'admin' && <Route path="api-keys" element={<ApiKeys />} />}
+            {role === 'admin' && <Route path="clients" element={<OmegaClients />} />}
+            {role === 'admin' && <Route path="clients/new" element={<OmegaClientForm />} />}
+            {role === 'admin' && <Route path="clients/:id" element={<OmegaClientDetails />} />}
+            {role === 'admin' && <Route path="clients/:id/edit" element={<OmegaClientForm />} />}
+            {role === 'admin' && <Route path="plans" element={<OmegaPlans />} />}
+            {role === 'admin' && <Route path="users" element={<OmegaStaff />} />}
             <Route path="logs" element={<Logs />} />
             <Route path="message-tester" element={<MessageTester />} />
             <Route path="infrastructure" element={<Infrastructure />} />
@@ -141,10 +152,6 @@ function AppContent() {
 function App() {
   if (window.location.pathname.startsWith('/app')) {
     return <ClientApp />;
-  }
-
-  if (window.location.pathname.startsWith('/omega')) {
-    return <OmegaApp />;
   }
 
   return (

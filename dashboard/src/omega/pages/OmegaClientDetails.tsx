@@ -20,7 +20,7 @@ export function OmegaClientDetails() {
         </div>
         <div className="omega-stack-inline">
           <span className={`omega-badge ${data!.status === 'active' ? 'success' : 'danger'}`}>{data!.status}</span>
-          <Link className="omega-primary-button" to={`/omega/clients/${data!.id}/edit`}>
+          <Link className="omega-primary-button" to={`/clients/${data!.id}/edit`}>
             Edit Client
           </Link>
         </div>
