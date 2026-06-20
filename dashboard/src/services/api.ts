@@ -318,18 +318,49 @@ export interface Settings {
 // API Client
 // =============================================================================
 
-async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+interface RequestOptions extends RequestInit {
+  timeoutMs?: number;
+}
+
+async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
+  const { timeoutMs, ...fetchOptions } = options;
 
   const apiKey = localStorage.getItem('openwa_api_key') || sessionStorage.getItem('openwa_api_key');
 
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
     ...(apiKey ? { 'X-API-Key': apiKey } : {}),
-    ...options.headers,
+    ...fetchOptions.headers,
   };
 
-  const response = await fetch(url, { ...options, headers });
+  const controller = timeoutMs ? new AbortController() : undefined;
+  const timeoutId = timeoutMs
+    ? setTimeout(() => {
+        controller?.abort();
+      }, timeoutMs)
+    : undefined;
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...fetchOptions,
+      headers,
+      signal: controller?.signal,
+    });
+  } catch (error) {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`Request timed out after ${Math.ceil(timeoutMs! / 1000)}s`);
+    }
+    throw error;
+  }
+
+  if (timeoutId) {
+    clearTimeout(timeoutId);
+  }
 
   if (response.status === 401) {
     // The stored API key is invalid/expired/revoked — clear it and return to login
@@ -375,7 +406,9 @@ export const sessionApi = {
   getStats: () => request<SessionStats>('/sessions/stats/overview'),
   getGroups: (id: string) =>
     request<{ id: string; name: string; linkedParentJID?: string | null }[]>(`/sessions/${id}/groups`),
-  getChats: (id: string) => request<Chat[]>(`/sessions/${id}/chats`),
+  // Bound the chats list request so a stalled proxy/backend connection cannot leave the sidebar
+  // spinner running forever. The backend itself times out live engine fetches after 15s.
+  getChats: (id: string) => request<Chat[]>(`/sessions/${id}/chats`, { timeoutMs: 20000 }),
   markChatRead: (id: string, chatId: string) =>
     request<{ success: boolean }>(`/sessions/${id}/chats/read`, {
       method: 'POST',
