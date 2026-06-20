@@ -33,6 +33,12 @@ export class Template {
   @Column({ type: 'text', nullable: true })
   footer: string | null;
 
+  @Column({ type: 'varchar', length: 40, nullable: true })
+  buttonLabel: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  buttonUrl: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

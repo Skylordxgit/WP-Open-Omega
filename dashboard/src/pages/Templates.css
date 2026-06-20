@@ -77,6 +77,23 @@
   padding: 1.5rem;
 }
 
+.template-button-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(37, 211, 102, 0.04);
+}
+
+.template-button-group-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
 .template-form .form-group {
   display: flex;
   flex-direction: column;
@@ -129,6 +146,13 @@
   top: 1rem;
 }
 
+.template-preview-note {
+  margin: 0.75rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
 .placeholder-list {
   display: flex;
   flex-direction: column;
@@ -147,21 +171,72 @@
   color: var(--primary);
 }
 
+.template-preview-whatsapp {
+  margin-top: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 18px;
+  overflow: hidden;
+  background: #0f1115;
+  box-shadow: var(--shadow-md);
+}
+
+.template-preview-whatsapp-bar {
+  padding: 0.75rem 1rem;
+  background: #111827;
+  color: #f3f4f6;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.template-preview-card {
+  padding: 0;
+  background: #111827;
+}
+
 .template-preview-box {
-  margin: 1rem 0 0;
+  margin: 0;
   min-height: 180px;
   max-height: 360px;
   overflow: auto;
   padding: 1rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-light);
-  color: var(--text-primary);
+  border: 0;
+  border-radius: 0;
+  background: #1f2937;
+  color: #f9fafb;
   white-space: pre-wrap;
   word-break: break-word;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-size: 0.875rem;
-  line-height: 1.6;
+  font-family: inherit;
+  font-size: 0.9375rem;
+  line-height: 1.7;
+}
+
+.template-preview-cta-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+  padding: 0 1rem 1rem;
+  background: #1f2937;
+}
+
+.template-preview-cta {
+  width: 100%;
+  justify-content: center;
+  padding: 0.9rem 1rem;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0 0 12px 12px;
+  background: transparent;
+  color: var(--primary);
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: default;
+}
+
+.template-preview-cta-url {
+  font-size: 0.75rem;
+  color: #93c5fd;
+  word-break: break-all;
 }
 
 .templates-list {
@@ -261,6 +336,31 @@
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   font-size: 0.75rem;
   font-weight: 600;
+}
+
+.template-button-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.875rem;
+}
+
+.template-button-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(37, 211, 102, 0.12);
+  border: 1px solid rgba(37, 211, 102, 0.24);
+  color: var(--primary);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.template-button-summary code {
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text-secondary);
 }
 
 .template-card-actions {

@@ -155,6 +155,39 @@ describe('WhatsAppWebJsAdapter.resolveContactPhone (@lid -> phone, #263)', () =>
   });
 });
 
+describe('WhatsAppWebJsAdapter button sends', () => {
+  const readyAdapter = () => {
+    const sendMessage = jest.fn().mockResolvedValue({
+      id: { _serialized: 'BTN1' },
+      timestamp: 1700000100,
+    });
+    const adapter = new WhatsAppWebJsAdapter({ sessionId: 's', sessionDataPath: './data/sessions', puppeteer: {} });
+    (adapter as unknown as { status: EngineStatus }).status = EngineStatus.READY;
+    (adapter as unknown as { client: unknown }).client = { sendMessage };
+    return { adapter, sendMessage };
+  };
+
+  it('sends a real button payload through client.sendMessage', async () => {
+    const { adapter, sendMessage } = readyAdapter();
+
+    const result = await adapter.sendButtonsMessage('628123@c.us', 'Choose an option', [
+      { id: 'track', text: 'Track order' },
+      { id: 'support', text: 'Talk to support' },
+    ]);
+
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(sendMessage.mock.calls[0][0]).toBe('628123@c.us');
+    expect(sendMessage.mock.calls[0][1]).toMatchObject({
+      body: 'Choose an option',
+      buttons: [
+        { buttonId: 'track', buttonText: { displayText: 'Track order' } },
+        { buttonId: 'support', buttonText: { displayText: 'Talk to support' } },
+      ],
+    });
+    expect(result).toEqual({ id: 'BTN1', timestamp: 1700000100 });
+  });
+});
+
 describe('resolveWebVersionPin (#251 — default WA-Web version pin)', () => {
   const orig = { v: process.env.WWEBJS_WEB_VERSION, p: process.env.WWEBJS_WEB_VERSION_REMOTE_PATH };
   afterEach(() => {

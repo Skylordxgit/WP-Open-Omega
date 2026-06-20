@@ -15,6 +15,7 @@ const mockEngineResult = { id: 'wa-msg-1', timestamp: 1706868000 };
 function createMockEngine() {
   return {
     sendTextMessage: jest.fn().mockResolvedValue(mockEngineResult),
+    sendButtonsMessage: jest.fn().mockResolvedValue(mockEngineResult),
     sendImageMessage: jest.fn().mockResolvedValue(mockEngineResult),
     sendVideoMessage: jest.fn().mockResolvedValue(mockEngineResult),
     sendAudioMessage: jest.fn().mockResolvedValue(mockEngineResult),
@@ -67,10 +68,7 @@ describe('MessageService', () => {
     };
 
     hookManager = {
-      execute: jest.fn().mockResolvedValue({
-        continue: true,
-        data: { sessionId: 'sess-1', input: { chatId: '628123456789@c.us', text: 'Hello' }, type: 'text' },
-      }),
+      execute: jest.fn().mockImplementation((_event: string, data: unknown) => Promise.resolve({ continue: true, data })),
     };
 
     templateService = {
@@ -186,6 +184,8 @@ describe('MessageService', () => {
         body: 'Hi {{customer}}, your order {{orderId}} shipped.',
         header: null,
         footer: null,
+        buttonLabel: null,
+        buttonUrl: null,
         createdAt: new Date(),
         updatedAt: new Date(),
         session: undefined as unknown as Template['session'],
@@ -238,6 +238,27 @@ describe('MessageService', () => {
       );
     });
 
+    it('should send a real reply button when the template has a button label', async () => {
+      (templateService.resolve as jest.Mock).mockResolvedValue(
+        mockTemplate({
+          body: 'Hello {{customer}}',
+          buttonLabel: 'Track {{customer}}',
+          buttonUrl: 'https://example.com/orders',
+        }),
+      );
+
+      await service.sendTemplate('sess-1', {
+        chatId: 'test@c.us',
+        templateId: 'tpl-1',
+        vars: { customer: 'Alice' },
+      });
+
+      expect(mockEngine.sendButtonsMessage).toHaveBeenCalledWith('test@c.us', 'Hello Alice', [
+        { id: 'template:tpl-1:primary', text: 'Track Alice' },
+      ]);
+      expect(mockEngine.sendTextMessage).not.toHaveBeenCalled();
+    });
+
     it('should leave unmatched placeholders literal', async () => {
       (templateService.resolve as jest.Mock).mockResolvedValue(mockTemplate({ body: 'Hi {{customer}} {{unknown}}' }));
 
@@ -257,6 +278,25 @@ describe('MessageService', () => {
         NotFoundException,
       );
       expect(mockEngine.sendTextMessage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('sendButtons', () => {
+    it('should send text with reply buttons and return messageId + timestamp', async () => {
+      const result = await service.sendButtons('sess-1', {
+        chatId: '628123456789@c.us',
+        text: 'Choose an option',
+        buttons: [
+          { id: 'track', text: 'Track order' },
+          { id: 'support', text: 'Talk to support' },
+        ],
+      });
+
+      expect(result).toEqual({ messageId: 'wa-msg-1', timestamp: 1706868000 });
+      expect(mockEngine.sendButtonsMessage).toHaveBeenCalledWith('628123456789@c.us', 'Choose an option', [
+        { id: 'track', text: 'Track order' },
+        { id: 'support', text: 'Talk to support' },
+      ]);
     });
   });
 

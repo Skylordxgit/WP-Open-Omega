@@ -2,9 +2,9 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { SessionService } from '../session/session.service';
-import { SendTextMessageDto, SendMediaMessageDto, MessageResponseDto } from './dto';
+import { SendTextMessageDto, SendMediaMessageDto, MessageResponseDto, SendButtonsMessageDto } from './dto';
 import { SendTemplateMessageDto } from './dto/send-template.dto';
-import { MediaInput, IWhatsAppEngine } from '../../engine/interfaces/whatsapp-engine.interface';
+import { ButtonInput, MediaInput, IWhatsAppEngine } from '../../engine/interfaces/whatsapp-engine.interface';
 import { Message, MessageDirection, MessageStatus } from './entities/message.entity';
 import { HookManager } from '../../core/hooks';
 import { TemplateService } from '../template/template.service';
@@ -89,6 +89,55 @@ export class MessageService {
     }
   }
 
+  async sendButtons(sessionId: string, dto: SendButtonsMessageDto): Promise<MessageResponseDto> {
+    const { continue: shouldContinue, data: hookData } = await this.hookManager.execute(
+      'message:sending',
+      { sessionId, input: dto, type: 'buttons' },
+      { sessionId, source: 'MessageService' },
+    );
+
+    if (!shouldContinue) {
+      throw new BadRequestException('Message sending blocked by plugin');
+    }
+
+    const finalDto = (hookData as { input: SendButtonsMessageDto }).input;
+    const engine = this.getEngine(sessionId);
+    const buttons = this.normalizeButtons(finalDto.buttons);
+
+    const message = await this.saveOutgoingMessage(sessionId, {
+      chatId: finalDto.chatId,
+      body: finalDto.text,
+      type: 'text',
+      metadata: {
+        buttons,
+      },
+    });
+
+    await this.simulateTypingIfEnabled(engine, finalDto.chatId, finalDto.text);
+
+    try {
+      const result = await engine.sendButtonsMessage(finalDto.chatId, finalDto.text, buttons);
+      message.waMessageId = result.id;
+      message.status = MessageStatus.SENT;
+      message.timestamp = result.timestamp;
+      await this.messageRepository.save(message);
+
+      return {
+        messageId: result.id,
+        timestamp: result.timestamp,
+      };
+    } catch (error) {
+      message.status = MessageStatus.FAILED;
+      await this.messageRepository.save(message);
+      await this.hookManager.execute(
+        'message:failed',
+        { sessionId, error: error instanceof Error ? error.message : String(error), input: finalDto },
+        { sessionId, source: 'MessageService' },
+      );
+      throw error;
+    }
+  }
+
   /**
    * Resolve a stored template, render its body (with optional header/footer
    * flattened using newlines) using the supplied variables, and delegate to the
@@ -107,6 +156,15 @@ export class MessageService {
       .filter((segment): segment is string => segment != null && segment.length > 0)
       .map(segment => renderTemplate(segment, vars));
     const text = segments.join('\n\n');
+
+    if (template.buttonLabel) {
+      const buttonText = renderTemplate(template.buttonLabel, vars);
+      return this.sendButtons(sessionId, {
+        chatId: dto.chatId,
+        text,
+        buttons: [{ id: `template:${template.id}:primary`, text: buttonText }],
+      });
+    }
 
     return this.sendText(sessionId, { chatId: dto.chatId, text });
   }
@@ -616,5 +674,12 @@ export class MessageService {
       filename: dto.filename,
       caption: dto.caption,
     };
+  }
+
+  private normalizeButtons(buttons: Array<{ id: string; text: string }>): ButtonInput[] {
+    return buttons.map(button => ({
+      id: button.id.trim(),
+      text: button.text.trim(),
+    }));
   }
 }

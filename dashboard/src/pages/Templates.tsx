@@ -20,6 +20,8 @@ type TemplateForm = {
   header: string;
   body: string;
   footer: string;
+  buttonLabel: string;
+  buttonUrl: string;
 };
 
 const emptyForm: TemplateForm = {
@@ -27,10 +29,14 @@ const emptyForm: TemplateForm = {
   header: '',
   body: '',
   footer: '',
+  buttonLabel: '',
+  buttonUrl: '',
 };
 
 function extractPlaceholders(template: TemplateForm | MessageTemplate) {
-  const source = [template.header, template.body, template.footer].filter(Boolean).join('\n');
+  const source = [template.header, template.body, template.footer, template.buttonLabel, template.buttonUrl]
+    .filter(Boolean)
+    .join('\n');
   return Array.from(new Set(Array.from(source.matchAll(/\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g), match => match[1]))).sort();
 }
 
@@ -40,6 +46,8 @@ function toPayload(form: TemplateForm): TemplatePayload {
     header: form.header.trim() || null,
     body: form.body.trim(),
     footer: form.footer.trim() || null,
+    buttonLabel: form.buttonLabel.trim() || null,
+    buttonUrl: form.buttonUrl.trim() || null,
   };
 }
 
@@ -48,6 +56,10 @@ function renderPreview(template: TemplateForm, values: Record<string, string>) {
     .filter(Boolean)
     .join('\n\n')
     .replace(/\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g, (_match, key: string) => values[key] || `{{${key}}}`);
+}
+
+function renderPreviewValue(value: string, values: Record<string, string>) {
+  return value.replace(/\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g, (_match, key: string) => values[key] || `{{${key}}}`);
 }
 
 export function Templates() {
@@ -70,6 +82,14 @@ export function Templates() {
   const selectedSession = sessions.find(session => session.id === selectedSessionId);
   const placeholders = useMemo(() => extractPlaceholders(form), [form]);
   const preview = useMemo(() => renderPreview(form, previewValues), [form, previewValues]);
+  const previewButtonLabel = useMemo(
+    () => (form.buttonLabel.trim() ? renderPreviewValue(form.buttonLabel.trim(), previewValues) : ''),
+    [form.buttonLabel, previewValues],
+  );
+  const previewButtonUrl = useMemo(
+    () => (form.buttonUrl.trim() ? renderPreviewValue(form.buttonUrl.trim(), previewValues) : ''),
+    [form.buttonUrl, previewValues],
+  );
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
   useEffect(() => {
@@ -107,6 +127,8 @@ export function Templates() {
       header: template.header || '',
       body: template.body,
       footer: template.footer || '',
+      buttonLabel: template.buttonLabel || '',
+      buttonUrl: template.buttonUrl || '',
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -268,6 +290,35 @@ export function Templates() {
                 />
               </div>
 
+              <div className="template-button-group">
+                <div className="template-button-group-header">
+                  <div>
+                    <label>{t('templates.buttonTitle')}</label>
+                    <p className="template-muted">{t('templates.buttonHint')}</p>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>{t('templates.buttonLabel')}</label>
+                  <input
+                    value={form.buttonLabel}
+                    onChange={event => setForm({ ...form, buttonLabel: event.target.value })}
+                    placeholder={t('templates.buttonLabelPlaceholder')}
+                    disabled={!canWrite}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>{t('templates.buttonUrl')}</label>
+                  <input
+                    value={form.buttonUrl}
+                    onChange={event => setForm({ ...form, buttonUrl: event.target.value })}
+                    placeholder={t('templates.buttonUrlPlaceholder')}
+                    disabled={!canWrite}
+                  />
+                </div>
+              </div>
+
               <div className="template-editor-actions">
                 <button className="btn-secondary" onClick={resetForm} disabled={isSaving}>
                   {t('common.cancel')}
@@ -286,6 +337,7 @@ export function Templates() {
 
           <aside className="template-preview">
             <h2>{t('templates.previewTitle')}</h2>
+            <p className="template-preview-note">{t('templates.previewNote')}</p>
             {placeholders.length > 0 ? (
               <div className="placeholder-list">
                 {placeholders.map(key => (
@@ -302,7 +354,20 @@ export function Templates() {
             ) : (
               <p className="template-muted">{t('templates.noPlaceholders')}</p>
             )}
-            <pre className="template-preview-box">{preview || t('templates.previewEmpty')}</pre>
+            <div className="template-preview-whatsapp">
+              <div className="template-preview-whatsapp-bar">WhatsApp Business</div>
+              <div className="template-preview-card">
+                <pre className="template-preview-box">{preview || t('templates.previewEmpty')}</pre>
+                {previewButtonLabel && (
+                  <div className="template-preview-cta-wrap">
+                    <button type="button" className="template-preview-cta" disabled>
+                      {previewButtonLabel}
+                    </button>
+                    {previewButtonUrl && <span className="template-preview-cta-url">{previewButtonUrl}</span>}
+                  </div>
+                )}
+              </div>
+            </div>
           </aside>
 
           <section className="templates-list">
@@ -344,6 +409,14 @@ export function Templates() {
                             {templatePlaceholders.map(key => (
                               <span key={key}>{`{{${key}}}`}</span>
                             ))}
+                          </div>
+                        )}
+                        {(template.buttonLabel || template.buttonUrl) && (
+                          <div className="template-button-summary">
+                            <span className="template-button-chip">
+                              {template.buttonLabel || t('templates.buttonTitle')}
+                            </span>
+                            {template.buttonUrl && <code>{template.buttonUrl}</code>}
                           </div>
                         )}
                       </div>

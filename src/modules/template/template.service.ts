@@ -21,6 +21,8 @@ export class TemplateService {
       body: dto.body,
       header: dto.header ?? null,
       footer: dto.footer ?? null,
+      buttonLabel: dto.buttonLabel ?? null,
+      buttonUrl: dto.buttonUrl ?? null,
     });
 
     const saved = await this.templateRepository.save(template);
@@ -72,6 +74,10 @@ export class TemplateService {
     if (dto.body !== undefined) template.body = dto.body;
     if (dto.header !== undefined) template.header = dto.header;
     if (dto.footer !== undefined) template.footer = dto.footer;
+    if (dto.buttonLabel !== undefined || dto.buttonUrl !== undefined) {
+      template.buttonLabel = dto.buttonLabel ?? null;
+      template.buttonUrl = dto.buttonUrl ?? null;
+    }
 
     return this.templateRepository.save(template);
   }

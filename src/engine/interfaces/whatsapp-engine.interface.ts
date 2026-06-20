@@ -21,6 +21,11 @@ export interface MediaInput {
   caption?: string;
 }
 
+export interface ButtonInput {
+  id: string;
+  text: string;
+}
+
 /**
  * Engine-neutral message type. Each adapter maps its library's native message-type tokens
  * (e.g. whatsapp-web.js `chat`/`ptt`/`vcard`) to this vocabulary at the adapter boundary,
@@ -343,6 +348,7 @@ export interface IWhatsAppEngine {
 
   // Messaging - Basic
   sendTextMessage(chatId: string, text: string): Promise<MessageResult>;
+  sendButtonsMessage(chatId: string, text: string, buttons: ButtonInput[]): Promise<MessageResult>;
   sendImageMessage(chatId: string, media: MediaInput): Promise<MessageResult>;
   sendVideoMessage(chatId: string, media: MediaInput): Promise<MessageResult>;
   sendAudioMessage(chatId: string, media: MediaInput): Promise<MessageResult>;

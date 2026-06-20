@@ -1,9 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsOptional, MaxLength } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, MaxLength, IsUrl, ValidateIf } from 'class-validator';
 
 const NAME_MAX_LENGTH = 100;
 const BODY_MAX_LENGTH = 4096;
 const HEADER_FOOTER_MAX_LENGTH = 1024;
+const BUTTON_LABEL_MAX_LENGTH = 40;
 
 export class CreateTemplateDto {
   @ApiProperty({
@@ -45,6 +46,27 @@ export class CreateTemplateDto {
   @IsString()
   @MaxLength(HEADER_FOOTER_MAX_LENGTH)
   footer?: string;
+
+  @ApiPropertyOptional({
+    description: 'Optional CTA button label for dashboard preview and future interactive sends',
+    example: 'Try now',
+    maxLength: BUTTON_LABEL_MAX_LENGTH,
+  })
+  @ValidateIf((o: CreateTemplateDto) => !!o.buttonUrl || !!o.buttonLabel)
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(BUTTON_LABEL_MAX_LENGTH)
+  buttonLabel?: string;
+
+  @ApiPropertyOptional({
+    description: 'Optional CTA button target URL',
+    example: 'https://example.com/orders',
+  })
+  @ValidateIf((o: CreateTemplateDto) => !!o.buttonUrl || !!o.buttonLabel)
+  @IsString()
+  @IsNotEmpty()
+  @IsUrl({ require_tld: false, require_protocol: true })
+  buttonUrl?: string;
 }
 
 export class UpdateTemplateDto {
@@ -73,6 +95,20 @@ export class UpdateTemplateDto {
   @IsString()
   @MaxLength(HEADER_FOOTER_MAX_LENGTH)
   footer?: string;
+
+  @ApiPropertyOptional({ description: 'Optional CTA button label', maxLength: BUTTON_LABEL_MAX_LENGTH })
+  @ValidateIf((o: UpdateTemplateDto) => o.buttonLabel !== undefined || o.buttonUrl !== undefined)
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(BUTTON_LABEL_MAX_LENGTH)
+  buttonLabel?: string;
+
+  @ApiPropertyOptional({ description: 'Optional CTA button target URL' })
+  @ValidateIf((o: UpdateTemplateDto) => o.buttonLabel !== undefined || o.buttonUrl !== undefined)
+  @IsString()
+  @IsNotEmpty()
+  @IsUrl({ require_tld: false, require_protocol: true })
+  buttonUrl?: string;
 }
 
 export class TemplateResponseDto {
@@ -93,6 +129,12 @@ export class TemplateResponseDto {
 
   @ApiPropertyOptional({ nullable: true })
   footer?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  buttonLabel?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  buttonUrl?: string | null;
 
   @ApiProperty()
   createdAt: Date;

@@ -56,6 +56,8 @@ export interface MessageTemplate {
   body: string;
   header?: string | null;
   footer?: string | null;
+  buttonLabel?: string | null;
+  buttonUrl?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -65,6 +67,8 @@ export interface TemplatePayload {
   body: string;
   header?: string | null;
   footer?: string | null;
+  buttonLabel?: string | null;
+  buttonUrl?: string | null;
 }
 
 export interface ApiKey {

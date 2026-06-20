@@ -436,6 +436,24 @@ describe('BaileysAdapter messaging', () => {
     expect(res).toEqual({ id: 'OUT1', timestamp: 1700000001 });
   });
 
+  it('sendButtonsMessage sends text with real reply buttons', async () => {
+    fakeSock.sendMessage.mockResolvedValue({ key: { id: 'BTN1' }, messageTimestamp: 1700000002 });
+    const adapter = await readyAdapter();
+    const res = await adapter.sendButtonsMessage('628111@s.whatsapp.net', 'Choose an option', [
+      { id: 'track', text: 'Track order' },
+      { id: 'support', text: 'Talk to support' },
+    ]);
+    expect(fakeSock.sendMessage).toHaveBeenCalledWith('628111@s.whatsapp.net', {
+      text: 'Choose an option',
+      buttons: [
+        { buttonId: 'track', buttonText: { displayText: 'Track order' }, type: 1 },
+        { buttonId: 'support', buttonText: { displayText: 'Talk to support' }, type: 1 },
+      ],
+      headerType: 1,
+    });
+    expect(res).toEqual({ id: 'BTN1', timestamp: 1700000002 });
+  });
+
   it('getNumberId resolves via onWhatsApp and returns the jid when it exists', async () => {
     fakeSock.onWhatsApp.mockResolvedValue([{ jid: '628111@s.whatsapp.net', exists: true }]);
     const adapter = await readyAdapter();

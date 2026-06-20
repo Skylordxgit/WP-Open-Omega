@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { Client, LocalAuth, MessageMedia, MessageTypes } from 'whatsapp-web.js';
+import { Buttons, Client, LocalAuth, MessageMedia, MessageTypes } from 'whatsapp-web.js';
 import * as qrcode from 'qrcode';
 import * as path from 'path';
 import {
@@ -8,6 +8,7 @@ import {
   EngineEventCallbacks,
   MessageResult,
   MediaInput,
+  ButtonInput,
   IncomingMessage,
   Contact,
   Group,
@@ -466,6 +467,19 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
   async sendTextMessage(chatId: string, text: string): Promise<MessageResult> {
     this.ensureReady();
     const msg = await this.client!.sendMessage(chatId, text);
+    return {
+      id: msg.id._serialized,
+      timestamp: msg.timestamp,
+    };
+  }
+
+  async sendButtonsMessage(chatId: string, text: string, buttons: ButtonInput[]): Promise<MessageResult> {
+    this.ensureReady();
+    const payload = new Buttons(
+      text,
+      buttons.map(button => ({ id: button.id, body: button.text })),
+    );
+    const msg = await this.client!.sendMessage(chatId, payload);
     return {
       id: msg.id._serialized,
       timestamp: msg.timestamp,

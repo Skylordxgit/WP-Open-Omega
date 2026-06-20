@@ -15,6 +15,8 @@ function createMockTemplate(overrides: Partial<Template> = {}): Template {
     body: 'Hi {{customer}}, order {{orderId}} shipped.',
     header: null,
     footer: null,
+    buttonLabel: null,
+    buttonUrl: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     session: undefined as unknown as Session,
@@ -45,7 +47,7 @@ describe('TemplateService', () => {
   // ── create ────────────────────────────────────────────────────────
 
   describe('create', () => {
-    it('should create a template with normalized null header/footer', async () => {
+    it('should create a template with normalized null optional fields', async () => {
       await service.create('sess-1', { name: 'welcome', body: 'Hi {{name}}' });
 
       expect(repository.create).toHaveBeenCalledWith(
@@ -55,21 +57,30 @@ describe('TemplateService', () => {
           body: 'Hi {{name}}',
           header: null,
           footer: null,
+          buttonLabel: null,
+          buttonUrl: null,
         }),
       );
       expect(repository.save).toHaveBeenCalled();
     });
 
-    it('should persist optional header and footer when provided', async () => {
+    it('should persist optional header, footer, and button metadata when provided', async () => {
       await service.create('sess-1', {
         name: 'promo',
         body: 'Buy now',
         header: 'OpenWA Store',
         footer: 'Reply STOP to opt out',
+        buttonLabel: 'Try now',
+        buttonUrl: 'https://example.com/orders',
       });
 
       expect(repository.create).toHaveBeenCalledWith(
-        expect.objectContaining({ header: 'OpenWA Store', footer: 'Reply STOP to opt out' }),
+        expect.objectContaining({
+          header: 'OpenWA Store',
+          footer: 'Reply STOP to opt out',
+          buttonLabel: 'Try now',
+          buttonUrl: 'https://example.com/orders',
+        }),
       );
     });
   });
@@ -152,6 +163,23 @@ describe('TemplateService', () => {
 
       expect(repository.save).toHaveBeenCalledWith(
         expect.objectContaining({ body: 'Updated body', name: template.name }),
+      );
+    });
+
+    it('should update button metadata when provided', async () => {
+      const template = createMockTemplate();
+      (repository.findOne as jest.Mock).mockResolvedValue(template);
+
+      await service.update('sess-1', 'tpl-uuid-1', {
+        buttonLabel: 'Track order',
+        buttonUrl: 'https://example.com/track',
+      });
+
+      expect(repository.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          buttonLabel: 'Track order',
+          buttonUrl: 'https://example.com/track',
+        }),
       );
     });
 

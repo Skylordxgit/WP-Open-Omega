@@ -2,7 +2,7 @@ import { Controller, Post, Get, Param, Body, Query, HttpCode, HttpStatus } from 
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { MessageService } from './message.service';
 import { BulkMessageService } from './bulk-message.service';
-import { SendTextMessageDto, SendMediaMessageDto, MessageResponseDto } from './dto';
+import { SendTextMessageDto, SendMediaMessageDto, MessageResponseDto, SendButtonsMessageDto } from './dto';
 import { SendTemplateMessageDto } from './dto/send-template.dto';
 import { SendBulkMessageDto, BulkMessageResponseDto } from './dto/bulk-message.dto';
 import {
@@ -65,9 +65,29 @@ export class MessageController {
     return this.messageService.sendText(sessionId, dto);
   }
 
+  @Post('send-buttons')
+  @RequireRole(ApiKeyRole.OPERATOR)
+  @ApiOperation({ summary: 'Send a text message with reply buttons' })
+  @ApiParam({ name: 'sessionId', description: 'Session ID' })
+  @ApiResponse({
+    status: 201,
+    description: 'Button message sent',
+    type: MessageResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Session not active or invalid request',
+  })
+  async sendButtons(
+    @Param('sessionId') sessionId: string,
+    @Body() dto: SendButtonsMessageDto,
+  ): Promise<MessageResponseDto> {
+    return this.messageService.sendButtons(sessionId, dto);
+  }
+
   @Post('send-template')
   @RequireRole(ApiKeyRole.OPERATOR)
-  @ApiOperation({ summary: 'Render a stored text template and send it as a text message' })
+  @ApiOperation({ summary: 'Render a stored template and send it as text or reply buttons' })
   @ApiParam({ name: 'sessionId', description: 'Session ID' })
   @ApiResponse({
     status: 201,

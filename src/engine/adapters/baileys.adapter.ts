@@ -12,6 +12,7 @@ import {
   Catalog,
   Contact,
   ContactCard,
+  ButtonInput,
   EngineEventCallbacks,
   EngineStatus,
   Group,
@@ -332,6 +333,20 @@ export class BaileysAdapter implements IWhatsAppEngine {
       id: sent?.key?.id ?? '',
       timestamp: this.toUnixSeconds(sent?.messageTimestamp),
     };
+  }
+
+  async sendButtonsMessage(chatId: string, text: string, buttons: ButtonInput[]): Promise<MessageResult> {
+    this.ensureReady();
+    const content = {
+      text,
+      buttons: buttons.map(button => ({
+        buttonId: button.id,
+        buttonText: { displayText: button.text },
+        type: 1,
+      })),
+      headerType: 1,
+    } as unknown as AnyMessageContent;
+    return this.sendContent(chatId, content);
   }
 
   async checkNumberExists(number: string): Promise<boolean> {
