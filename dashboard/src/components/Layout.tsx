@@ -2,10 +2,12 @@ import { useState, useEffect, useRef } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
+  BarChart3,
   LayoutDashboard,
   Smartphone,
   MessageSquare,
   Building2,
+  CreditCard,
   Webhook,
   Key,
   FileText,
@@ -37,22 +39,24 @@ interface LayoutProps {
 }
 
 const allNavItems = [
-  { to: '/', icon: LayoutDashboard, key: 'dashboard' as const, adminOnly: false },
-  { to: '/sessions', icon: Smartphone, key: 'sessions' as const, adminOnly: false },
-  { to: '/chats', icon: MessageSquare, key: 'chats' as const, adminOnly: false },
-  { to: '/webhooks', icon: Webhook, key: 'webhooks' as const, adminOnly: false },
-  { to: '/templates', icon: ClipboardList, key: 'templates' as const, adminOnly: false },
-  { to: '/contacts', icon: Users2, key: 'contacts' as const, adminOnly: false },
-  { to: '/api-keys', icon: Key, key: 'apiKeys' as const, adminOnly: true },
-  { to: '/clients', icon: Building2, key: 'clients' as const, adminOnly: true },
-  { to: '/plans', icon: Package2, key: 'plans' as const, adminOnly: true },
-  { to: '/users', icon: Users2, key: 'users' as const, adminOnly: true },
-  { to: '/bulk-messaging', icon: Megaphone, key: 'bulkMessaging' as const, adminOnly: false },
-  { to: '/message-tester', icon: Send, key: 'messageTester' as const, adminOnly: false },
+  { to: '/', icon: LayoutDashboard, key: 'dashboard' as const, label: 'Dashboard', adminOnly: false },
+  { to: '/sessions', icon: Smartphone, key: 'sessions' as const, label: 'Sessions', adminOnly: false },
+  { to: '/chats', icon: MessageSquare, key: 'chats' as const, label: 'Chats', adminOnly: false },
+  { to: '/webhooks', icon: Webhook, key: 'webhooks' as const, label: 'Webhooks', adminOnly: false },
+  { to: '/templates', icon: ClipboardList, key: 'templates' as const, label: 'Templates', adminOnly: false },
+  { to: '/contacts', icon: Users2, key: 'contacts' as const, label: 'Contacts', adminOnly: false },
+  { to: '/api-keys', icon: Key, key: 'apiKeys' as const, label: 'API Keys', adminOnly: true },
+  { to: '/clients', icon: Building2, key: 'clients' as const, label: 'Clients', adminOnly: true },
+  { to: '/users', icon: Users2, key: 'users' as const, label: 'Users', adminOnly: true },
+  { to: '/plans', icon: Package2, key: 'plansPricing' as const, label: 'Plans / Pricing', adminOnly: true },
+  { to: '/usage', icon: BarChart3, key: 'usageLimits' as const, label: 'Usage / Limits', adminOnly: true },
+  { to: '/billing', icon: CreditCard, key: 'billing' as const, label: 'Billing', adminOnly: true },
+  { to: '/bulk-messaging', icon: Megaphone, key: 'bulkMessaging' as const, label: 'Bulk Messaging', adminOnly: false },
+  { to: '/message-tester', icon: Send, key: 'messageTester' as const, label: 'Message Tester', adminOnly: false },
   // Backend /infra/* is ADMIN-only; hide the nav item from non-admins (UX + defense-in-depth).
-  { to: '/infrastructure', icon: Server, key: 'infrastructure' as const, adminOnly: true },
-  { to: '/plugins', icon: Puzzle, key: 'plugins' as const, adminOnly: true },
-  { to: '/logs', icon: FileText, key: 'logs' as const, adminOnly: false },
+  { to: '/infrastructure', icon: Server, key: 'infrastructure' as const, label: 'Infrastructure', adminOnly: true },
+  { to: '/plugins', icon: Puzzle, key: 'plugins' as const, label: 'Plugins', adminOnly: true },
+  { to: '/logs', icon: FileText, key: 'logs' as const, label: 'Logs', adminOnly: false },
 ];
 
 const themeIcons = { light: Sun, dark: Moon, system: Monitor };
@@ -167,8 +171,8 @@ export function Layout({ onLogout, userRole }: LayoutProps) {
         )}
 
         <nav className="sidebar-nav">
-          {navItems.map(({ to, icon: Icon, key }) => {
-            const label = t(`nav.${key}`);
+          {navItems.map(({ to, icon: Icon, key, label: fallbackLabel }) => {
+            const label = t(`nav.${key}`, { defaultValue: fallbackLabel });
             return (
               <NavLink
                 key={to}

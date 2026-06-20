@@ -45,6 +45,8 @@ const OmegaClientForm = lazy(() => import('./omega/pages/OmegaClientForm').then(
 const OmegaClientDetails = lazy(() => import('./omega/pages/OmegaClientDetails').then(m => ({ default: m.OmegaClientDetails })));
 const OmegaPlans = lazy(() => import('./omega/pages/OmegaPlans').then(m => ({ default: m.OmegaPlans })));
 const OmegaStaff = lazy(() => import('./omega/pages/OmegaStaff').then(m => ({ default: m.OmegaStaff })));
+const OmegaUsage = lazy(() => import('./omega/pages/OmegaUsage').then(m => ({ default: m.OmegaUsage })));
+const OmegaBilling = lazy(() => import('./omega/pages/OmegaBilling').then(m => ({ default: m.OmegaBilling })));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -139,6 +141,8 @@ function AppContent() {
             {role === 'admin' && <Route path="clients/:id/edit" element={<OmegaClientForm />} />}
             {role === 'admin' && <Route path="plans" element={<OmegaPlans />} />}
             {role === 'admin' && <Route path="users" element={<OmegaStaff />} />}
+            {role === 'admin' && <Route path="usage" element={<OmegaUsage />} />}
+            {role === 'admin' && <Route path="billing" element={<OmegaBilling />} />}
             <Route path="bulk-messaging" element={<BulkMessaging />} />
             <Route path="logs" element={<Logs />} />
             <Route path="message-tester" element={<MessageTester />} />
