@@ -2,17 +2,33 @@
 
 :root {
   --primary: #25d366;
-  --primary-hover: #1da851;
-  --bg-light: #f8fafc;
+  --primary-hover: #1db85a;
+  --primary-soft: rgba(37, 211, 102, 0.12);
+  --primary-soft-strong: rgba(37, 211, 102, 0.2);
+  --primary-border: rgba(37, 211, 102, 0.3);
+  --bg-light: #f2f7f4;
   --bg-white: #ffffff;
   --bg-card: #ffffff;
-  --text-primary: #0f172a; /* Slate 900 */
-  --text-secondary: #475569; /* Slate 600 */
-  --text-muted: #94a3b8; /* Slate 400 */
-  --border: #e2e8f0; /* Slate 200 */
+  --text-primary: #102131;
+  --text-secondary: #42566f;
+  --text-muted: #7890aa;
+  --border: #d9e5df;
+  --border-strong: #bfd1c7;
   --error: #ef4444;
   --success: #22c55e;
   --warning: #f59e0b;
+  --page-bg:
+    radial-gradient(circle at top right, rgba(37, 211, 102, 0.15), transparent 24%),
+    radial-gradient(circle at top left, rgba(16, 185, 129, 0.08), transparent 22%),
+    linear-gradient(180deg, #eef6f1 0%, #f7faf8 34%, #f2f7fb 100%);
+  --sidebar-bg: linear-gradient(180deg, #0f1724 0%, #172538 100%);
+  --sidebar-text: #f3f8ff;
+  --sidebar-muted: #8aa0b8;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --sidebar-surface: rgba(255, 255, 255, 0.05);
+  --sidebar-surface-hover: rgba(255, 255, 255, 0.11);
+  --sidebar-active: rgba(37, 211, 102, 0.16);
+  --sidebar-active-border: rgba(37, 211, 102, 0.38);
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
@@ -25,13 +41,29 @@
      app theme, not just the OS preference — otherwise toggling dark while the OS is light left
      native dropdowns rendered in the light scheme (#249). */
   color-scheme: dark;
-  --bg-light: #0f172a; /* Slate 900 */
-  --bg-white: #1e293b; /* Slate 800 */
-  --bg-card: #1e293b;
-  --text-primary: #f1f5f9; /* Slate 100 */
-  --text-secondary: #cbd5e1; /* Slate 300 */
-  --text-muted: #64748b; /* Slate 500 */
-  --border: #334155; /* Slate 700 */
+  --primary-soft: rgba(37, 211, 102, 0.16);
+  --primary-soft-strong: rgba(37, 211, 102, 0.24);
+  --primary-border: rgba(37, 211, 102, 0.34);
+  --bg-light: #0b1320;
+  --bg-white: #121d2c;
+  --bg-card: #121d2c;
+  --text-primary: #eff6ff;
+  --text-secondary: #bfd0e6;
+  --text-muted: #7890aa;
+  --border: #253247;
+  --border-strong: #30425b;
+  --page-bg:
+    radial-gradient(circle at top right, rgba(37, 211, 102, 0.14), transparent 24%),
+    radial-gradient(circle at top left, rgba(16, 185, 129, 0.1), transparent 22%),
+    linear-gradient(180deg, #08111d 0%, #0c1625 34%, #0b1421 100%);
+  --sidebar-bg: linear-gradient(180deg, #070d16 0%, #0d1726 100%);
+  --sidebar-text: #eef6ff;
+  --sidebar-muted: #86a0bb;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --sidebar-surface: rgba(255, 255, 255, 0.05);
+  --sidebar-surface-hover: rgba(255, 255, 255, 0.1);
+  --sidebar-active: rgba(37, 211, 102, 0.18);
+  --sidebar-active-border: rgba(37, 211, 102, 0.34);
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.4);
@@ -49,13 +81,29 @@
        The Login screen never sets data-theme, so it relies solely on this block — without an
        explicit color-scheme the popup rendered light, leaving the light option text illegible (#249). */
     color-scheme: dark;
-    --bg-light: #0f172a;
-    --bg-white: #1e293b;
-    --bg-card: #1e293b;
-    --text-primary: #f1f5f9;
-    --text-secondary: #cbd5e1;
-    --text-muted: #64748b;
-    --border: #334155;
+    --primary-soft: rgba(37, 211, 102, 0.16);
+    --primary-soft-strong: rgba(37, 211, 102, 0.24);
+    --primary-border: rgba(37, 211, 102, 0.34);
+    --bg-light: #0b1320;
+    --bg-white: #121d2c;
+    --bg-card: #121d2c;
+    --text-primary: #eff6ff;
+    --text-secondary: #bfd0e6;
+    --text-muted: #7890aa;
+    --border: #253247;
+    --border-strong: #30425b;
+    --page-bg:
+      radial-gradient(circle at top right, rgba(37, 211, 102, 0.14), transparent 24%),
+      radial-gradient(circle at top left, rgba(16, 185, 129, 0.1), transparent 22%),
+      linear-gradient(180deg, #08111d 0%, #0c1625 34%, #0b1421 100%);
+    --sidebar-bg: linear-gradient(180deg, #070d16 0%, #0d1726 100%);
+    --sidebar-text: #eef6ff;
+    --sidebar-muted: #86a0bb;
+    --sidebar-border: rgba(255, 255, 255, 0.08);
+    --sidebar-surface: rgba(255, 255, 255, 0.05);
+    --sidebar-surface-hover: rgba(255, 255, 255, 0.1);
+    --sidebar-active: rgba(37, 211, 102, 0.18);
+    --sidebar-active-border: rgba(37, 211, 102, 0.34);
     --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
     --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
     --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.4);
@@ -79,7 +127,7 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: var(--bg-light);
+  background: var(--page-bg);
   color: var(--text-primary);
   line-height: 1.6;
 }

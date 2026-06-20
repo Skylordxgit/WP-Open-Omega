@@ -52,9 +52,18 @@
     box-shadow 0.2s ease;
 }
 
+.stat-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, var(--primary), rgba(37, 211, 102, 0));
+}
+
 .stat-card:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
+  border-color: var(--primary-border);
 }
 
 .stat-header {
@@ -161,7 +170,7 @@
 }
 
 .sessions-table .table-header {
-  background: var(--bg-light);
+  background: rgba(37, 211, 102, 0.06);
   border-radius: var(--radius) var(--radius) 0 0;
   font-size: 0.7rem;
   font-weight: 700;

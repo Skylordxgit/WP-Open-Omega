@@ -5,7 +5,10 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: var(--bg-light);
+  background:
+    radial-gradient(circle at top left, rgba(37, 211, 102, 0.14), transparent 24%),
+    radial-gradient(circle at bottom right, rgba(16, 185, 129, 0.1), transparent 22%),
+    var(--sidebar-bg);
   padding: 2rem;
   position: fixed;
   top: 0;
@@ -15,13 +18,20 @@
 }
 
 .login-card {
-  background: var(--bg-white);
+  background: rgba(255, 255, 255, 0.96);
   border-radius: 12px;
   box-shadow: var(--shadow-lg);
+  border: 1px solid rgba(255, 255, 255, 0.65);
   padding: 3rem;
   width: 100%;
   max-width: 420px;
   text-align: center;
+}
+
+[data-theme='dark'] .login-card,
+:root:not([data-theme='light']) .login-card {
+  background: rgba(18, 29, 44, 0.92);
+  border-color: rgba(121, 145, 170, 0.2);
 }
 
 .login-logo {
@@ -55,7 +65,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text-secondary);
-  background: var(--bg-white);
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .login-language svg {
@@ -165,7 +175,7 @@
   font-size: 1rem;
   font-weight: 600;
   color: white;
-  background: var(--primary);
+  background: linear-gradient(135deg, var(--primary) 0%, #18a64e 100%);
   border: none;
   border-radius: var(--radius);
   cursor: pointer;
