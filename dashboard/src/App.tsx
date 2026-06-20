@@ -35,6 +35,8 @@ const Webhooks = lazy(() => import('./pages/Webhooks').then(m => ({ default: m.W
 const Templates = lazy(() => import('./pages/Templates').then(m => ({ default: m.Templates })));
 const Logs = lazy(() => import('./pages/Logs').then(m => ({ default: m.Logs })));
 const ApiKeys = lazy(() => import('./pages/ApiKeys').then(m => ({ default: m.ApiKeys })));
+const Contacts = lazy(() => import('./pages/Contacts').then(m => ({ default: m.Contacts })));
+const BulkMessaging = lazy(() => import('./pages/BulkMessaging').then(m => ({ default: m.BulkMessaging })));
 const MessageTester = lazy(() => import('./pages/MessageTester').then(m => ({ default: m.MessageTester })));
 const Infrastructure = lazy(() => import('./pages/Infrastructure').then(m => ({ default: m.Infrastructure })));
 const Plugins = lazy(() => import('./pages/Plugins'));
@@ -129,6 +131,7 @@ function AppContent() {
             <Route path="chats" element={<Chats />} />
             <Route path="webhooks" element={<Webhooks />} />
             <Route path="templates" element={<Templates />} />
+            <Route path="contacts" element={<Contacts />} />
             {role === 'admin' && <Route path="api-keys" element={<ApiKeys />} />}
             {role === 'admin' && <Route path="clients" element={<OmegaClients />} />}
             {role === 'admin' && <Route path="clients/new" element={<OmegaClientForm />} />}
@@ -136,6 +139,7 @@ function AppContent() {
             {role === 'admin' && <Route path="clients/:id/edit" element={<OmegaClientForm />} />}
             {role === 'admin' && <Route path="plans" element={<OmegaPlans />} />}
             {role === 'admin' && <Route path="users" element={<OmegaStaff />} />}
+            <Route path="bulk-messaging" element={<BulkMessaging />} />
             <Route path="logs" element={<Logs />} />
             <Route path="message-tester" element={<MessageTester />} />
             <Route path="infrastructure" element={<Infrastructure />} />

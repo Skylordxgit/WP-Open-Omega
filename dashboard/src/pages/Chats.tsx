@@ -111,6 +111,8 @@ export function Chats() {
   const [chats, setChats] = useState<Chat[]>([]);
   const [loadingChats, setLoadingChats] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [inboxView, setInboxView] = useState<'all' | 'unread' | 'direct' | 'groups'>('all');
+  const [sortMode, setSortMode] = useState<'recent' | 'oldest'>('recent');
 
   // Selected chat & message history
   const [activeChat, setActiveChat] = useState<Chat | null>(null);
@@ -595,6 +597,8 @@ export function Chats() {
   const totalUnread = chats.reduce((sum, chat) => sum + (chat.unreadCount || 0), 0);
   const directChats = chats.filter(chat => !chat.isGroup).length;
   const groupChats = chats.filter(chat => chat.isGroup).length;
+  const activeChatMessageCount = messages.length;
+  const activeChatUnread = activeChat?.unreadCount || 0;
 
   const formatChatTime = (timestamp?: number) => {
     if (!timestamp) return '';
@@ -611,11 +615,37 @@ export function Chats() {
     return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
   };
 
-  const filteredChats = chats.filter(
-    c =>
-      c.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.id.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  const filteredChats = chats
+    .filter(chat => {
+      const matchesSearch =
+        chat.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        chat.id.toLowerCase().includes(searchQuery.toLowerCase());
+
+      if (!matchesSearch) return false;
+      if (inboxView === 'unread') return (chat.unreadCount || 0) > 0;
+      if (inboxView === 'direct') return !chat.isGroup;
+      if (inboxView === 'groups') return chat.isGroup;
+      return true;
+    })
+    .sort((a, b) => {
+      const aTime = a.timestamp || 0;
+      const bTime = b.timestamp || 0;
+      return sortMode === 'recent' ? bTime - aTime : aTime - bTime;
+    });
+
+  const inboxTitle =
+    inboxView === 'unread'
+      ? 'Unread queue'
+      : inboxView === 'direct'
+        ? 'Direct conversations'
+        : inboxView === 'groups'
+          ? 'Group conversations'
+          : selectedSession?.name || 'Inbox';
+
+  const inboxSubtitle =
+    inboxView === 'unread'
+      ? `${totalUnread} unread messages waiting for action`
+      : `${filteredChats.length} conversations available in this workspace`;
 
   return (
     <div className="chats-page">
@@ -690,28 +720,44 @@ export function Chats() {
             <div className="chats-rail-group">
               <div className="chats-rail-label">Views</div>
               <div className="chats-rail-nav">
-                <button type="button" className="chats-rail-nav-item active">
+                <button
+                  type="button"
+                  className={`chats-rail-nav-item ${inboxView === 'all' ? 'active' : ''}`}
+                  onClick={() => setInboxView('all')}
+                >
                   <span className="chats-rail-nav-main">
                     <MessageSquare size={18} />
                     All
                   </span>
                   <span>{filteredChats.length}</span>
                 </button>
-                <button type="button" className="chats-rail-nav-item">
+                <button
+                  type="button"
+                  className={`chats-rail-nav-item ${inboxView === 'unread' ? 'active' : ''}`}
+                  onClick={() => setInboxView('unread')}
+                >
                   <span className="chats-rail-nav-main">
                     <Clock3 size={18} />
                     Unread
                   </span>
                   <span>{totalUnread}</span>
                 </button>
-                <button type="button" className="chats-rail-nav-item">
+                <button
+                  type="button"
+                  className={`chats-rail-nav-item ${inboxView === 'direct' ? 'active' : ''}`}
+                  onClick={() => setInboxView('direct')}
+                >
                   <span className="chats-rail-nav-main">
                     <Phone size={18} />
                     Direct
                   </span>
                   <span>{directChats}</span>
                 </button>
-                <button type="button" className="chats-rail-nav-item">
+                <button
+                  type="button"
+                  className={`chats-rail-nav-item ${inboxView === 'groups' ? 'active' : ''}`}
+                  onClick={() => setInboxView('groups')}
+                >
                   <span className="chats-rail-nav-main">
                     <Users size={18} />
                     Groups
@@ -720,13 +766,31 @@ export function Chats() {
                 </button>
               </div>
             </div>
+
+            <div className="chats-rail-group chats-rail-group--summary">
+              <div className="chats-rail-label">Workspace health</div>
+              <div className="chats-rail-stats">
+                <div className="chats-rail-stat">
+                  <span>Live</span>
+                  <strong>{isConnected ? 'Online' : 'Reconnecting'}</strong>
+                </div>
+                <div className="chats-rail-stat">
+                  <span>Unread</span>
+                  <strong>{totalUnread}</strong>
+                </div>
+                <div className="chats-rail-stat">
+                  <span>Mix</span>
+                  <strong>{directChats}/{groupChats}</strong>
+                </div>
+              </div>
+            </div>
           </aside>
 
           <section className="chats-inbox">
             <div className="chats-inbox-header">
               <div>
-                <div className="chats-inbox-title">{selectedSession?.name || 'Inbox'}</div>
-                <div className="chats-inbox-subtitle">{t('chats.subtitle')}</div>
+                <div className="chats-inbox-title">{inboxTitle}</div>
+                <div className="chats-inbox-subtitle">{inboxSubtitle}</div>
               </div>
               <button type="button" className="chats-inbox-channel">
                 All channels
@@ -744,12 +808,20 @@ export function Chats() {
                   onChange={e => setSearchQuery(e.target.value)}
                 />
               </div>
-              <button type="button" className="chats-toolbar-chip active">
+              <button
+                type="button"
+                className={`chats-toolbar-chip ${inboxView === 'all' ? 'active' : ''}`}
+                onClick={() => setInboxView('all')}
+              >
                 Open
               </button>
-              <button type="button" className="chats-toolbar-chip">
+              <button
+                type="button"
+                className="chats-toolbar-chip"
+                onClick={() => setSortMode(current => (current === 'recent' ? 'oldest' : 'recent'))}
+              >
                 <ArrowUpDown size={15} />
-                Started first
+                {sortMode === 'recent' ? 'Recent first' : 'Started first'}
               </button>
               <button type="button" className="chats-toolbar-icon" aria-label="Filters">
                 <Funnel size={16} />
@@ -795,9 +867,14 @@ export function Chats() {
                               <span className="no-message">{t('chats.noMessageYet')}</span>
                             )}
                           </span>
-                          {chat.unreadCount > 0 && (
-                            <span className="chat-unread-badge">{chat.unreadCount}</span>
-                          )}
+                          <div className="chat-item-badges">
+                            <span className={`chat-type-badge ${chat.isGroup ? 'group' : 'direct'}`}>
+                              {chat.isGroup ? 'Group' : 'Direct'}
+                            </span>
+                            {chat.unreadCount > 0 && (
+                              <span className="chat-unread-badge">{chat.unreadCount}</span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -818,6 +895,11 @@ export function Chats() {
                     <div className="room-contact-info">
                       <h3>{activeChat.name || activeChat.id.split('@')[0]}</h3>
                       <span>{activeChat.id}</span>
+                      <div className="room-contact-meta">
+                        <span>{activeChat.isGroup ? 'Shared workspace' : '1:1 conversation'}</span>
+                        <span>{activeChatMessageCount} messages loaded</span>
+                        <span>{activeChatUnread} unread</span>
+                      </div>
                     </div>
                   </div>
                   <div className="room-header-actions">
@@ -1125,9 +1207,21 @@ export function Chats() {
               </div>
             ) : (
               <div className="chats-room-placeholder">
-                <MessageSquare size={80} className="placeholder-icon" />
+                <div className="chats-room-placeholder-orb">
+                  <MessageSquare size={80} className="placeholder-icon" />
+                </div>
                 <h2>Select a conversation</h2>
                 <p>Pick a thread from the inbox to start replying, reviewing context, and handling WhatsApp chats faster.</p>
+                <div className="chats-placeholder-grid">
+                  <div className="chats-placeholder-card">
+                    <strong>Pick a conversation</strong>
+                    <span>Use the center column to scan unread threads, recent activity, and group chats.</span>
+                  </div>
+                  <div className="chats-placeholder-card">
+                    <strong>Reply with context</strong>
+                    <span>Keep replies, reactions, attachments, and customer history in one focused pane.</span>
+                  </div>
+                </div>
               </div>
             )}
           </main>

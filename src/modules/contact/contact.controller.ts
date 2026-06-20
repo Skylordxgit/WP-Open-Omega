@@ -1,13 +1,50 @@
-import { Controller, Get, Post, Delete, Param, HttpCode, HttpStatus } from '@nestjs/common';
+import { Body, Controller, Get, Post, Delete, Param, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { ContactService } from './contact.service';
 import { RequireRole } from '../auth/decorators/auth.decorators';
 import { ApiKeyRole } from '../auth/entities/api-key.entity';
+import { SaveContactsDto } from './dto/saved-contact.dto';
 
 @ApiTags('contacts')
 @Controller('sessions/:sessionId/contacts')
 export class ContactController {
   constructor(private readonly contactService: ContactService) {}
+
+  @Get('saved')
+  @ApiOperation({ summary: 'Get saved contacts for a session' })
+  @ApiParam({ name: 'sessionId', description: 'Session ID' })
+  @ApiResponse({ status: 200, description: 'Saved contacts list' })
+  async listSaved(@Param('sessionId') sessionId: string) {
+    return this.contactService.listSavedContacts(sessionId);
+  }
+
+  @Post('saved')
+  @RequireRole(ApiKeyRole.OPERATOR)
+  @ApiOperation({ summary: 'Save imported or session contacts for a session' })
+  @ApiParam({ name: 'sessionId', description: 'Session ID' })
+  @ApiResponse({ status: 200, description: 'Saved contacts updated' })
+  async saveContacts(@Param('sessionId') sessionId: string, @Body() dto: SaveContactsDto) {
+    return this.contactService.saveContacts(sessionId, dto);
+  }
+
+  @Delete('saved')
+  @RequireRole(ApiKeyRole.OPERATOR)
+  @ApiOperation({ summary: 'Clear all saved contacts for a session' })
+  @ApiParam({ name: 'sessionId', description: 'Session ID' })
+  @ApiResponse({ status: 200, description: 'Saved contacts cleared' })
+  async clearSaved(@Param('sessionId') sessionId: string) {
+    return this.contactService.clearSavedContacts(sessionId);
+  }
+
+  @Delete('saved/:id')
+  @RequireRole(ApiKeyRole.OPERATOR)
+  @ApiOperation({ summary: 'Delete one saved contact for a session' })
+  @ApiParam({ name: 'sessionId', description: 'Session ID' })
+  @ApiParam({ name: 'id', description: 'Saved contact ID' })
+  @ApiResponse({ status: 200, description: 'Saved contact deleted' })
+  async deleteSaved(@Param('sessionId') sessionId: string, @Param('id') id: string) {
+    return this.contactService.deleteSavedContact(sessionId, id);
+  }
 
   @Get()
   @ApiOperation({ summary: 'Get all contacts for a session' })

@@ -103,6 +103,60 @@ export interface MessageResponse {
   timestamp: number;
 }
 
+export interface BulkMessageContent {
+  text?: string;
+  caption?: string;
+  image?: { url?: string; base64?: string; mimetype?: string };
+  video?: { url?: string; base64?: string; mimetype?: string };
+  audio?: { url?: string; base64?: string; mimetype?: string };
+  document?: { url?: string; base64?: string; mimetype?: string; filename?: string };
+}
+
+export interface BulkMessageItem {
+  chatId: string;
+  type: 'text' | 'image' | 'video' | 'audio' | 'document';
+  content: BulkMessageContent;
+  variables?: Record<string, string>;
+}
+
+export interface BulkMessageOptions {
+  delayBetweenMessages?: number;
+  randomizeDelay?: boolean;
+  stopOnError?: boolean;
+}
+
+export interface BulkMessageBatchResponse {
+  batchId: string;
+  status: string;
+  totalMessages: number;
+  estimatedCompletionTime?: string;
+  statusUrl: string;
+}
+
+export interface BulkMessageBatchStatus {
+  batchId: string;
+  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED' | string;
+  progress: {
+    total: number;
+    sent: number;
+    failed: number;
+    pending: number;
+    cancelled: number;
+  };
+  results: Array<{
+    chatId: string;
+    status: string;
+    messageId?: string;
+    sentAt?: string;
+    error?: {
+      code: string;
+      message: string;
+    };
+  }>;
+  startedAt?: string;
+  completedAt?: string;
+}
+
 // Chat summary returned by GET /sessions/:id/chats (mirrors the backend ChatSummary).
 export interface Chat {
   id: string;
@@ -391,7 +445,38 @@ export interface CheckNumberResponse {
   whatsappId: string | null;
 }
 
+export interface ContactRecord {
+  id: string;
+  name?: string;
+  pushName?: string;
+  number: string;
+  isMyContact: boolean;
+  isBlocked: boolean;
+  profilePicUrl?: string;
+}
+
+export interface SavedContactRecord {
+  id: string;
+  sessionId: string;
+  name?: string | null;
+  number: string;
+  source: 'imported' | 'session';
+  createdAt: string;
+  updatedAt: string;
+}
+
 export const contactApi = {
+  list: (sessionId: string) => request<ContactRecord[]>(`/sessions/${sessionId}/contacts`),
+  listSaved: (sessionId: string) => request<SavedContactRecord[]>(`/sessions/${sessionId}/contacts/saved`),
+  saveBulk: (sessionId: string, contacts: Array<{ name?: string; number: string; source?: 'imported' | 'session' }>) =>
+    request<SavedContactRecord[]>(`/sessions/${sessionId}/contacts/saved`, {
+      method: 'POST',
+      body: JSON.stringify({ contacts }),
+    }),
+  clearSaved: (sessionId: string) =>
+    request<{ success: boolean }>(`/sessions/${sessionId}/contacts/saved`, { method: 'DELETE' }),
+  deleteSaved: (sessionId: string, id: string) =>
+    request<{ success: boolean }>(`/sessions/${sessionId}/contacts/saved/${id}`, { method: 'DELETE' }),
   checkNumber: (sessionId: string, number: string) =>
     request<CheckNumberResponse>(`/sessions/${sessionId}/contacts/check/${encodeURIComponent(number)}`),
 };
@@ -502,6 +587,23 @@ export const messageApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  sendBulk: (
+    sessionId: string,
+    data: { batchId?: string; messages: BulkMessageItem[]; options?: BulkMessageOptions },
+  ) =>
+    request<BulkMessageBatchResponse>(`/sessions/${sessionId}/messages/send-bulk`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getBatchStatus: (sessionId: string, batchId: string) =>
+    request<BulkMessageBatchStatus>(`/sessions/${sessionId}/messages/batch/${batchId}`),
+  cancelBatch: (sessionId: string, batchId: string) =>
+    request<{ batchId: string; status: string; progress: BulkMessageBatchStatus['progress'] }>(
+      `/sessions/${sessionId}/messages/batch/${batchId}/cancel`,
+      {
+        method: 'POST',
+      },
+    ),
 };
 
 // =============================================================================
