@@ -213,6 +213,20 @@ export interface ChatMessage {
   };
 }
 
+export interface LiveChatHistoryMessage {
+  id: string;
+  from: string;
+  to: string;
+  chatId: string;
+  body: string;
+  type: MessageType;
+  timestamp: number;
+  fromMe: boolean;
+  isGroup: boolean;
+  media?: { mimetype: string; filename?: string; data?: string };
+  quotedMessage?: { id: string; body: string };
+}
+
 export interface SendMediaPayload {
   base64?: string;
   url?: string;
@@ -421,6 +435,12 @@ export const sessionApi = {
   getChatMessages: (id: string, chatId: string, limit = 100) =>
     request<{ messages: ChatMessage[]; total: number }>(
       `/sessions/${id}/messages?chatId=${encodeURIComponent(chatId)}&limit=${limit}`,
+    ),
+  getChatHistory: (id: string, chatId: string, limit = 100, includeMedia = false) =>
+    request<LiveChatHistoryMessage[]>(
+      `/sessions/${id}/messages/${encodeURIComponent(chatId)}/history?limit=${limit}&includeMedia=${
+        includeMedia ? 'true' : 'false'
+      }`,
     ),
 };
 

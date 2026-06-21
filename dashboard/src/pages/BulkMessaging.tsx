@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import {
   contactApi,
   messageApi,
+  type MessageTemplate,
   type BulkMessageBatchResponse,
   type BulkMessageBatchStatus,
   type BulkMessageContent,
@@ -11,7 +12,7 @@ import {
 } from '../services/api';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { useRole } from '../hooks/useRole';
-import { useSessionGroupsQuery, useSessionsQuery } from '../hooks/queries';
+import { useSessionGroupsQuery, useSessionsQuery, useTemplatesQuery } from '../hooks/queries';
 import { PageHeader } from '../components/PageHeader';
 import './BulkMessaging.css';
 
@@ -19,6 +20,18 @@ const messageTypes = ['text', 'image', 'video', 'audio', 'document'] as const;
 
 function formatDate(value?: string) {
   return value ? new Date(value).toLocaleString() : '—';
+}
+
+function buildTemplateMessage(template: MessageTemplate) {
+  const parts = [template.header, template.body, template.footer].filter(Boolean);
+
+  if (template.buttonLabel && template.buttonUrl) {
+    parts.push(`${template.buttonLabel}: ${template.buttonUrl}`);
+  } else if (template.buttonUrl) {
+    parts.push(template.buttonUrl);
+  }
+
+  return parts.join('\n\n');
 }
 
 export function BulkMessaging() {
@@ -34,6 +47,7 @@ export function BulkMessaging() {
   const [selectedSavedContactIds, setSelectedSavedContactIds] = useState<string[]>([]);
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
   const [messageType, setMessageType] = useState<typeof messageTypes[number]>('text');
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [content, setContent] = useState('');
   const [mediaUrl, setMediaUrl] = useState('');
   const [delayBetweenMessages, setDelayBetweenMessages] = useState(3000);
@@ -47,6 +61,7 @@ export function BulkMessaging() {
   const [savedContacts, setSavedContacts] = useState<SavedContactRecord[]>([]);
 
   const { data: groups = [], isLoading: loadingGroups } = useSessionGroupsQuery(sessionId, recipientType === 'group');
+  const { data: templates = [], isLoading: loadingTemplates } = useTemplatesQuery(sessionId, !!sessionId);
 
   useEffect(() => {
     if (sessions.length > 0 && !sessionId) {
@@ -59,6 +74,10 @@ export function BulkMessaging() {
       setSelectedGroups([]);
     }
   }, [recipientType]);
+
+  useEffect(() => {
+    setSelectedTemplateId('');
+  }, [sessionId]);
 
   useEffect(() => {
     if (!sessionId) {
@@ -136,6 +155,7 @@ export function BulkMessaging() {
       : new Set([...personalRecipients, ...selectedSavedContacts.map(contact => contact.number)]).size;
   const activeStatus = batchStatus?.status ?? batchResponse?.status ?? null;
   const batchIsActive = activeStatus === 'PENDING' || activeStatus === 'PROCESSING';
+  const selectedTemplate = templates.find(template => template.id === selectedTemplateId) ?? null;
 
   const resolveChatIds = async () => {
     if (recipientType === 'group') {
@@ -365,6 +385,42 @@ export function BulkMessaging() {
               ))}
             </div>
           </div>
+
+          <div className="bulk-form-group">
+            <label>{t('bulkMessaging.template')}</label>
+            <select
+              value={selectedTemplateId}
+              onChange={event => {
+                const nextTemplateId = event.target.value;
+                setSelectedTemplateId(nextTemplateId);
+
+                if (!nextTemplateId) return;
+
+                const template = templates.find(item => item.id === nextTemplateId);
+                if (!template) return;
+
+                setMessageType('text');
+                setContent(buildTemplateMessage(template));
+              }}
+            >
+              <option value="">{loadingTemplates ? t('bulkMessaging.loadingTemplates') : t('bulkMessaging.templatePlaceholder')}</option>
+              {templates.map(template => (
+                <option key={template.id} value={template.id}>
+                  {template.name}
+                </option>
+              ))}
+            </select>
+            <span className="bulk-hint">
+              {templates.length > 0 ? t('bulkMessaging.templateHint') : t('bulkMessaging.templateEmpty')}
+            </span>
+          </div>
+
+          {selectedTemplate && (
+            <div className="bulk-template-summary">
+              <strong>{selectedTemplate.name}</strong>
+              <p>{selectedTemplate.body}</p>
+            </div>
+          )}
 
           {messageType === 'text' ? (
             <div className="bulk-form-group">

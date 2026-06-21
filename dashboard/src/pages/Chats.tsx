@@ -13,7 +13,6 @@ import {
   X,
   CornerUpLeft,
   Trash2,
-  ChevronDown,
   Funnel,
   ArrowUpDown,
   Phone,
@@ -27,6 +26,7 @@ import {
   type Session,
   type Chat,
   type ChatMessage,
+  type LiveChatHistoryMessage,
   type MessageType,
 } from '../services/api';
 import { useWebSocket } from '../hooks/useWebSocket';
@@ -96,6 +96,61 @@ const getMediaSrc = (media?: MessageMedia): string => {
   return `data:${media.mimetype};base64,${media.data}`;
 };
 
+const sortMessagesAscending = (items: ChatMessageView[]) =>
+  [...items].sort((a, b) => {
+    const aTime = a.timestamp || Math.floor(new Date(a.createdAt).getTime() / 1000);
+    const bTime = b.timestamp || Math.floor(new Date(b.createdAt).getTime() / 1000);
+    return aTime - bTime;
+  });
+
+const mapLiveHistoryMessage = (message: LiveChatHistoryMessage): ChatMessageView => ({
+  id: message.id,
+  waMessageId: message.id,
+  chatId: message.chatId,
+  from: message.from,
+  to: message.to,
+  body: message.body,
+  type: asMessageType(message.type),
+  direction: message.fromMe ? 'outgoing' : 'incoming',
+  status: message.fromMe ? 'sent' : 'read',
+  timestamp: message.timestamp,
+  createdAt: new Date(message.timestamp * 1000).toISOString(),
+  metadata: {
+    media: message.media,
+    quotedMessage: message.quotedMessage,
+  },
+});
+
+const mergeMessageSources = (liveMessages: ChatMessageView[], storedMessages: ChatMessageView[]) => {
+  const merged = new Map<string, ChatMessageView>();
+
+  for (const message of liveMessages) {
+    merged.set(message.waMessageId || message.id, message);
+  }
+
+  for (const message of storedMessages) {
+    const key = message.waMessageId || message.id;
+    const existing = merged.get(key);
+
+    if (!existing) {
+      merged.set(key, message);
+      continue;
+    }
+
+    merged.set(key, {
+      ...existing,
+      ...message,
+      status: mergeDeliveryStatus(existing.status, message.status) ?? message.status,
+      metadata: {
+        ...existing.metadata,
+        ...message.metadata,
+      },
+    });
+  }
+
+  return sortMessagesAscending(Array.from(merged.values()));
+};
+
 export function Chats() {
   const { t } = useTranslation();
   useDocumentTitle(t('nav.chats'));
@@ -104,6 +159,7 @@ export function Chats() {
 
   // Sessions list & active session
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [sessionStatusById, setSessionStatusById] = useState<Record<string, string>>({});
   const [selectedSessionId, setSelectedSessionId] = useState<string>('');
   const [loadingSessions, setLoadingSessions] = useState<boolean>(true);
 
@@ -147,6 +203,12 @@ export function Chats() {
         const list = await sessionApi.list();
         const readySessions = list.filter(s => s.status === 'ready');
         setSessions(readySessions);
+        setSessionStatusById(
+          readySessions.reduce<Record<string, string>>((acc, session) => {
+            acc[session.id] = session.status;
+            return acc;
+          }, {}),
+        );
         if (readySessions.length > 0) {
           setSelectedSessionId(readySessions[0].id);
         }
@@ -311,7 +373,15 @@ export function Chats() {
     [selectedSessionId],
   );
 
+  const handleSessionStatus = useCallback((event: { sessionId: string; status: string }) => {
+    setSessionStatusById(current => ({
+      ...current,
+      [event.sessionId]: event.status,
+    }));
+  }, []);
+
   const { isConnected, connectionFailed, reconnect, subscribe, unsubscribe } = useWebSocket({
+    onSessionStatus: handleSessionStatus,
     onMessage: handleIncomingMessage,
     onMessageAck: handleIncomingMessageAck,
     onMessageReaction: handleIncomingMessageReaction,
@@ -321,6 +391,7 @@ export function Chats() {
   useEffect(() => {
     if (selectedSessionId && isConnected) {
       subscribe(selectedSessionId, [
+        'session.status',
         'message.received',
         'message.sent',
         'message.ack',
@@ -340,8 +411,23 @@ export function Chats() {
       try {
         setLoadingMessages(true);
         markChatRead(chatId);
-        const data = await sessionApi.getChatMessages(selectedSessionId, chatId, 100);
-        setMessages([...data.messages].reverse());
+        const [storedResult, liveResult] = await Promise.allSettled([
+          sessionApi.getChatMessages(selectedSessionId, chatId, 100),
+          sessionApi.getChatHistory(selectedSessionId, chatId, 100, false),
+        ]);
+
+        const storedMessages =
+          storedResult.status === 'fulfilled' ? sortMessagesAscending(storedResult.value.messages) : [];
+
+        const liveMessages =
+          liveResult.status === 'fulfilled' ? liveResult.value.map(mapLiveHistoryMessage) : [];
+
+        if (liveMessages.length > 0) {
+          setMessages(mergeMessageSources(liveMessages, storedMessages));
+          return;
+        }
+
+        setMessages(storedMessages);
       } catch (err) {
         showErrorToast(t('chats.errors.loadMessages'), err instanceof Error ? err.message : undefined);
         setMessages([]);
@@ -597,6 +683,9 @@ export function Chats() {
   const totalUnread = chats.reduce((sum, chat) => sum + (chat.unreadCount || 0), 0);
   const directChats = chats.filter(chat => !chat.isGroup).length;
   const groupChats = chats.filter(chat => chat.isGroup).length;
+  const selectedSessionStatus = sessionStatusById[selectedSessionId] ?? selectedSession?.status ?? 'disconnected';
+  const selectedSessionOnline = isConnected && selectedSessionStatus === 'ready';
+  const onlineSessionsCount = selectedSessionOnline ? 1 : 0;
   const activeChatMessageCount = messages.length;
   const activeChatUnread = activeChat?.unreadCount || 0;
 
@@ -768,19 +857,23 @@ export function Chats() {
             </div>
 
             <div className="chats-rail-group chats-rail-group--summary">
-              <div className="chats-rail-label">Workspace health</div>
+              <div className="chats-rail-label">Live stats</div>
               <div className="chats-rail-stats">
                 <div className="chats-rail-stat">
-                  <span>Live</span>
-                  <strong>{isConnected ? 'Online' : 'Reconnecting'}</strong>
+                  <span>Online</span>
+                  <strong>{onlineSessionsCount}</strong>
                 </div>
                 <div className="chats-rail-stat">
                   <span>Unread</span>
                   <strong>{totalUnread}</strong>
                 </div>
                 <div className="chats-rail-stat">
-                  <span>Mix</span>
-                  <strong>{directChats}/{groupChats}</strong>
+                  <span>Direct</span>
+                  <strong>{directChats}</strong>
+                </div>
+                <div className="chats-rail-stat">
+                  <span>Groups</span>
+                  <strong>{groupChats}</strong>
                 </div>
               </div>
             </div>
@@ -792,10 +885,6 @@ export function Chats() {
                 <div className="chats-inbox-title">{inboxTitle}</div>
                 <div className="chats-inbox-subtitle">{inboxSubtitle}</div>
               </div>
-              <button type="button" className="chats-inbox-channel">
-                All channels
-                <ChevronDown size={16} />
-              </button>
             </div>
 
             <div className="chats-inbox-toolbar">

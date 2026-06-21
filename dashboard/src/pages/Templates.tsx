@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, Check, Copy, Edit, FileText, Loader2, Plus, Trash2, X } from 'lucide-react';
+import { AlertTriangle, Check, Copy, Edit, ExternalLink, FileText, Loader2, Plus, Trash2, X } from 'lucide-react';
 import { type MessageTemplate, type TemplatePayload } from '../services/api';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { useRole } from '../hooks/useRole';
@@ -62,6 +62,19 @@ function renderPreviewValue(value: string, values: Record<string, string>) {
   return value.replace(/\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g, (_match, key: string) => values[key] || `{{${key}}}`);
 }
 
+function getPreviewPlaceholderValue(key: string, values: Record<string, string>, index: number) {
+  return values[key] || `Sample ${index + 1}`;
+}
+
+function getPreviewUrlLabel(url: string) {
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+}
+
 export function Templates() {
   const { t } = useTranslation();
   useDocumentTitle(t('templates.title'));
@@ -81,14 +94,22 @@ export function Templates() {
 
   const selectedSession = sessions.find(session => session.id === selectedSessionId);
   const placeholders = useMemo(() => extractPlaceholders(form), [form]);
-  const preview = useMemo(() => renderPreview(form, previewValues), [form, previewValues]);
+  const filledPreviewValues = useMemo(
+    () =>
+      placeholders.reduce<Record<string, string>>((acc, key, index) => {
+        acc[key] = getPreviewPlaceholderValue(key, previewValues, index);
+        return acc;
+      }, {}),
+    [placeholders, previewValues],
+  );
+  const preview = useMemo(() => renderPreview(form, filledPreviewValues), [filledPreviewValues, form]);
   const previewButtonLabel = useMemo(
-    () => (form.buttonLabel.trim() ? renderPreviewValue(form.buttonLabel.trim(), previewValues) : ''),
-    [form.buttonLabel, previewValues],
+    () => (form.buttonLabel.trim() ? renderPreviewValue(form.buttonLabel.trim(), filledPreviewValues) : ''),
+    [filledPreviewValues, form.buttonLabel],
   );
   const previewButtonUrl = useMemo(
-    () => (form.buttonUrl.trim() ? renderPreviewValue(form.buttonUrl.trim(), previewValues) : ''),
-    [form.buttonUrl, previewValues],
+    () => (form.buttonUrl.trim() ? renderPreviewValue(form.buttonUrl.trim(), filledPreviewValues) : ''),
+    [filledPreviewValues, form.buttonUrl],
   );
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
@@ -296,26 +317,29 @@ export function Templates() {
                     <label>{t('templates.buttonTitle')}</label>
                     <p className="template-muted">{t('templates.buttonHint')}</p>
                   </div>
+                  <span className="template-button-badge">{t('templates.buttonOptional')}</span>
                 </div>
 
-                <div className="form-group">
-                  <label>{t('templates.buttonLabel')}</label>
-                  <input
-                    value={form.buttonLabel}
-                    onChange={event => setForm({ ...form, buttonLabel: event.target.value })}
-                    placeholder={t('templates.buttonLabelPlaceholder')}
-                    disabled={!canWrite}
-                  />
-                </div>
+                <div className="template-button-fields">
+                  <div className="form-group">
+                    <label>{t('templates.buttonLabel')}</label>
+                    <input
+                      value={form.buttonLabel}
+                      onChange={event => setForm({ ...form, buttonLabel: event.target.value })}
+                      placeholder={t('templates.buttonLabelPlaceholder')}
+                      disabled={!canWrite}
+                    />
+                  </div>
 
-                <div className="form-group">
-                  <label>{t('templates.buttonUrl')}</label>
-                  <input
-                    value={form.buttonUrl}
-                    onChange={event => setForm({ ...form, buttonUrl: event.target.value })}
-                    placeholder={t('templates.buttonUrlPlaceholder')}
-                    disabled={!canWrite}
-                  />
+                  <div className="form-group">
+                    <label>{t('templates.buttonUrl')}</label>
+                    <input
+                      value={form.buttonUrl}
+                      onChange={event => setForm({ ...form, buttonUrl: event.target.value })}
+                      placeholder={t('templates.buttonUrlPlaceholder')}
+                      disabled={!canWrite}
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -357,13 +381,25 @@ export function Templates() {
             <div className="template-preview-whatsapp">
               <div className="template-preview-whatsapp-bar">WhatsApp Business</div>
               <div className="template-preview-card">
-                <pre className="template-preview-box">{preview || t('templates.previewEmpty')}</pre>
+                <div className="template-preview-box">
+                  {form.header.trim() && <div className="template-preview-header">{renderPreviewValue(form.header.trim(), filledPreviewValues)}</div>}
+                  <pre className="template-preview-body">{preview || t('templates.previewEmpty')}</pre>
+                  {form.footer.trim() && (
+                    <div className="template-preview-footer">{renderPreviewValue(form.footer.trim(), filledPreviewValues)}</div>
+                  )}
+                </div>
                 {previewButtonLabel && (
                   <div className="template-preview-cta-wrap">
                     <button type="button" className="template-preview-cta" disabled>
+                      <ExternalLink size={16} />
                       {previewButtonLabel}
                     </button>
-                    {previewButtonUrl && <span className="template-preview-cta-url">{previewButtonUrl}</span>}
+                    {previewButtonUrl && (
+                      <div className="template-preview-cta-meta">
+                        <span className="template-preview-cta-url">{getPreviewUrlLabel(previewButtonUrl)}</span>
+                        <span className="template-preview-cta-link">{previewButtonUrl}</span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
