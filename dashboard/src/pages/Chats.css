@@ -343,6 +343,12 @@
 }
 
 /* Custom Scrollbar for chats list */
+.chats-list,
+.room-messages {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
 .chats-list::-webkit-scrollbar,
 .room-messages::-webkit-scrollbar {
   width: 6px;
@@ -350,8 +356,13 @@
 
 .chats-list::-webkit-scrollbar-thumb,
 .room-messages::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.1);
+  background: var(--border-strong);
   border-radius: 3px;
+}
+
+.chats-list::-webkit-scrollbar-thumb:hover,
+.room-messages::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }
 
 .chats-list::-webkit-scrollbar-track,
