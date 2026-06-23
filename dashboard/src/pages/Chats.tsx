@@ -5,6 +5,7 @@ import {
   Send,
   Loader2,
   ChevronDown,
+  Check,
   Info,
   User,
   Users,
@@ -927,6 +928,24 @@ export function Chats() {
   const activeChatMessageCount = messages.length;
   const activeChatUnread = activeChat?.unreadCount || 0;
   const activeChatLifecycle = activeChat ? getChatLifecycle(activeChat.sessionId, activeChat.id) : 'open';
+  const selectedChannelSummary =
+    selectedChannelIds.length === sessions.length
+      ? 'All channels'
+      : selectedChannels.length === 1
+        ? selectedChannels[0].name
+        : selectedChannels.map(session => session.name).join(', ');
+  const channelMenuTitle = `All channels ${sessions.length}`;
+  const infoPanelPhone =
+    activeChat?.isGroup ? 'Not available for groups' : loadingContactPhone ? 'Resolving...' : contactPhone || 'Not available';
+  const infoPanelEmail = matchingSavedContact?.email || '';
+
+  const toggleChannelSelection = (sessionId: string) => {
+    setSelectedChannelIds(current => {
+      const checked = current.includes(sessionId);
+      const next = checked ? current.filter(id => id !== sessionId) : [...current, sessionId];
+      return next.length > 0 ? next : current;
+    });
+  };
 
   useEffect(() => {
     if (!activeChat || activeChat.isGroup) {
@@ -1177,46 +1196,50 @@ export function Chats() {
             </div>
 
             <div className="chats-inbox-toolbar">
+              {/* Channel selector fix: compact trigger, full dark dropdown on demand. */}
               <div className="chats-toolbar-menu-wrap">
                 <button
                   type="button"
                   className={`chats-toolbar-chip ${selectedChannelIds.length !== sessions.length ? 'active' : ''}`}
                   onClick={() => setShowChannelMenu(current => !current)}
                 >
-                  {selectedChannelIds.length === sessions.length ? 'All channels' : `${selectedChannelIds.length} channels`}
+                  <span className="chats-toolbar-chip-label" title={selectedChannelSummary}>
+                    {selectedChannelSummary}
+                  </span>
                   <ChevronDown size={15} />
                 </button>
                 {showChannelMenu && (
                   <div className="chats-toolbar-menu chats-toolbar-menu--channels">
+                    <div className="channel-menu-header">
+                      <strong>{channelMenuTitle}</strong>
+                      <span>{selectedChannelIds.length} selected</span>
+                    </div>
                     <button
                       type="button"
+                      className="channel-menu-all"
                       onClick={() => {
                         setSelectedChannelIds(sessions.map(session => session.id));
                         setShowChannelMenu(false);
                       }}
                     >
-                      All channels
-                      <span>{sessions.length}</span>
+                      <span>All channels</span>
+                      {selectedChannelIds.length === sessions.length ? <Check size={15} /> : <span>{sessions.length}</span>}
                     </button>
                     {sessions.map(session => {
                       const checked = selectedChannelIds.includes(session.id);
                       return (
-                        <label key={session.id} className="channel-menu-option">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => {
-                              setSelectedChannelIds(current => {
-                                const next = checked ? current.filter(id => id !== session.id) : [...current, session.id];
-                                return next.length > 0 ? next : current;
-                              });
-                            }}
-                          />
+                        <button
+                          key={session.id}
+                          type="button"
+                          className={`channel-menu-option ${checked ? 'selected' : ''}`}
+                          onClick={() => toggleChannelSelection(session.id)}
+                        >
                           <div>
                             <strong>{session.name}</strong>
                             <span>{session.phone || t('chats.noPhone')}</span>
                           </div>
-                        </label>
+                          <span className="channel-menu-check">{checked ? <Check size={15} /> : null}</span>
+                        </button>
                       );
                     })}
                   </div>
@@ -1353,7 +1376,6 @@ export function Chats() {
                     </div>
                     <div className="room-contact-info">
                       <h3>{activeChat.name || activeChat.id.split('@')[0]}</h3>
-                      <span>{activeChat.id}</span>
                       <div className="room-contact-meta">
                         <span>{activeChat.sessionName}</span>
                         <span>{activeChat.isGroup ? 'Shared workspace' : '1:1 conversation'}</span>
@@ -1375,9 +1397,10 @@ export function Chats() {
                     >
                       {activeChatLifecycle === 'closed' ? 'Closed' : 'Open'}
                     </button>
+                    {/* Header action fix: keep the info button always visible and aligned. */}
                     <button
                       type="button"
-                      className="room-info-btn"
+                      className={`room-info-btn ${showChatInfo ? 'active' : ''}`}
                       onClick={() => setShowChatInfo(current => !current)}
                       aria-label="Toggle chat info"
                       title="Toggle chat info"
@@ -1389,6 +1412,7 @@ export function Chats() {
 
                 <div className={`room-content ${showChatInfo ? 'with-info' : ''}`}>
                   <div className="room-thread">
+                {/* Scroll fix: only the message history region grows and scrolls. */}
                 <div className="room-messages">
                   {loadingMessages ? (
                     <div className="messages-loading">
@@ -1691,7 +1715,7 @@ export function Chats() {
                       <div className="chat-info-panel-header">
                         <div>
                           <h3>Chat info</h3>
-                          <p>{activeChat.name || activeChat.id.split('@')[0]}</p>
+                          <p>{activeChat.sessionName}</p>
                         </div>
                         <button
                           type="button"
@@ -1704,60 +1728,62 @@ export function Chats() {
                       </div>
 
                       <div className="chat-info-panel-body">
-                        <div className="chat-info-group">
-                          <span className="chat-info-label">Chat ID</span>
-                          <code className="chat-info-value">{activeChat.id}</code>
-                        </div>
-
-                        <div className="chat-info-group">
-                          <span className="chat-info-label">Phone number</span>
-                          <div className="chat-info-value">
-                            {activeChat.isGroup
-                              ? 'Not available for groups'
-                              : loadingContactPhone
-                                ? 'Resolving...'
-                                : contactPhone || 'Not available'}
+                        {/* Info panel cleanup: grouped cards, clearer labels, compact stats. */}
+                        <section className="chat-info-card">
+                          <span className="chat-info-section-title">Overview</span>
+                          <div className="chat-info-group">
+                            <span className="chat-info-label">Chat name</span>
+                            <div className="chat-info-value">{activeChat.name || activeChat.id.split('@')[0]}</div>
                           </div>
-                        </div>
+                          <div className="chat-info-group">
+                            <span className="chat-info-label">Chat ID</span>
+                            <code className="chat-info-value">{activeChat.id}</code>
+                          </div>
+                          <div className="chat-info-group">
+                            <span className="chat-info-label">Phone number</span>
+                            <div className="chat-info-value">{infoPanelPhone}</div>
+                          </div>
+                          <div className="chat-info-group">
+                            <span className="chat-info-label">Email</span>
+                            <input
+                              type="email"
+                              value={contactEmailInput}
+                              onChange={event => setContactEmailInput(event.target.value)}
+                              placeholder="name@example.com"
+                              className="chat-info-input"
+                              disabled={activeChat.isGroup || savingContactInfo}
+                            />
+                            <span className="chat-info-help">
+                              {infoPanelEmail ? 'Email ready to update from this panel.' : 'Save email only from this chat info panel.'}
+                            </span>
+                          </div>
+                        </section>
 
-                        <div className="chat-info-group">
-                          <span className="chat-info-label">Email</span>
-                          <input
-                            type="email"
-                            value={contactEmailInput}
-                            onChange={event => setContactEmailInput(event.target.value)}
-                            placeholder="name@example.com"
-                            className="chat-info-input"
-                            disabled={activeChat.isGroup || savingContactInfo}
-                          />
-                          <span className="chat-info-help">
-                            Save email only from this chat info panel.
-                          </span>
-                        </div>
+                        <section className="chat-info-card">
+                          <span className="chat-info-section-title">Chat status</span>
+                          <div className="chat-info-stats-grid">
+                            <div className="chat-info-stat-card">
+                              <span className="chat-info-label">Status</span>
+                              <div className="chat-info-value">{activeChatLifecycle === 'closed' ? 'Closed' : 'Open'}</div>
+                            </div>
+                            <div className="chat-info-stat-card">
+                              <span className="chat-info-label">Type</span>
+                              <div className="chat-info-value">{activeChat.isGroup ? 'Group chat' : 'Direct chat'}</div>
+                            </div>
+                            <div className="chat-info-stat-card">
+                              <span className="chat-info-label">Unread count</span>
+                              <div className="chat-info-value">{activeChatUnread}</div>
+                            </div>
+                            <div className="chat-info-stat-card">
+                              <span className="chat-info-label">Loaded history</span>
+                              <div className="chat-info-value">{activeChatMessageCount}</div>
+                            </div>
+                          </div>
+                        </section>
 
-                        <div className="chat-info-group">
-                          <span className="chat-info-label">Status</span>
-                          <div className="chat-info-value">{activeChatLifecycle === 'closed' ? 'Closed' : 'Open'}</div>
-                        </div>
-
-                        <div className="chat-info-group">
-                          <span className="chat-info-label">Type</span>
-                          <div className="chat-info-value">{activeChat.isGroup ? 'Group chat' : 'Direct chat'}</div>
-                        </div>
-
-                        <div className="chat-info-group">
-                          <span className="chat-info-label">Unread</span>
-                          <div className="chat-info-value">{activeChatUnread}</div>
-                        </div>
-
-                        <div className="chat-info-group">
-                          <span className="chat-info-label">Loaded history</span>
-                          <div className="chat-info-value">{activeChatMessageCount}</div>
-                        </div>
-
-                        <div className="chat-info-group">
+                        <section className="chat-info-card">
                           <div className="chat-info-row">
-                            <span className="chat-info-label">Tags</span>
+                            <span className="chat-info-section-title">Tags</span>
                             {labelsAvailable && availableLabels.length > 0 && (
                               <div className="chat-info-tag-add">
                                 <select value={selectedLabelToAdd} onChange={event => setSelectedLabelToAdd(event.target.value)}>
@@ -1779,7 +1805,7 @@ export function Chats() {
                           {!labelsAvailable ? (
                             <span className="chat-info-help">Tags are available only when labels are supported by this session.</span>
                           ) : chatLabels.length === 0 ? (
-                            <span className="chat-info-help">No tags added yet.</span>
+                            <div className="chat-info-empty-state">No tags added yet.</div>
                           ) : (
                             <div className="chat-info-tags">
                               {chatLabels.map(label => (
@@ -1797,7 +1823,7 @@ export function Chats() {
                               ))}
                             </div>
                           )}
-                        </div>
+                        </section>
                       </div>
 
                       <div className="chat-info-panel-footer">
