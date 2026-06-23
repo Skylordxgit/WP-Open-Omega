@@ -788,6 +788,45 @@
   color: #475569;
 }
 
+/* Header info button — circular glass control, right-aligned, premium hover/focus. */
+.room-info-btn {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(8px);
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.room-info-btn:hover {
+  background: rgba(37, 99, 235, 0.1);
+  border-color: rgba(37, 99, 235, 0.35);
+  color: #1d4ed8;
+}
+
+.room-info-btn:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+[data-theme='dark'] .room-info-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #cbd5e1;
+}
+
+[data-theme='dark'] .room-info-btn:hover {
+  background: rgba(37, 99, 235, 0.22);
+  color: #bfdbfe;
+}
+
 .room-contact-info {
   min-width: 0;
 }
@@ -1151,6 +1190,23 @@
 .btn-input-accessory.active {
   background: rgba(34, 197, 94, 0.1);
   color: var(--primary);
+}
+
+/* Disabled accessory (e.g. while sending / no write access) reads clearly inactive. */
+.btn-input-accessory:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-input-accessory:disabled:hover {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+/* Mic = future UI: visible and premium, but unmistakably not yet active. */
+.btn-mic-future:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .attachment-preview-banner {

@@ -19,6 +19,8 @@ import {
   Phone,
   Wifi,
   Clock3,
+  Info,
+  Mic,
 } from 'lucide-react';
 import {
   sessionApi,
@@ -991,6 +993,15 @@ export function Chats() {
                       {isConnected ? 'Connected' : 'Waiting for sync'}
                     </div>
                     <div className="room-header-pill subtle">{activeChat.isGroup ? 'Group' : 'Direct'}</div>
+                    {/* Presentational only — placeholder for a future chat-info panel. No handler/state yet. */}
+                    <button
+                      type="button"
+                      className="room-info-btn"
+                      title="Chat info"
+                      aria-label="Chat info"
+                    >
+                      <Info size={18} />
+                    </button>
                   </div>
                 </header>
 
@@ -1277,6 +1288,16 @@ export function Chats() {
                       disabled={!canWrite || sending}
                       className="message-text-input"
                     />
+                    {/* Presentational placeholder for future voice messages — always disabled, no handler. */}
+                    <button
+                      type="button"
+                      disabled
+                      className="btn-input-accessory btn-mic-future"
+                      title="Voice messages — coming soon"
+                      aria-label="Voice message (coming soon)"
+                    >
+                      <Mic size={20} />
+                    </button>
                     <button
                       type="submit"
                       disabled={!canWrite || (!messageInput.trim() && !attachment) || sending}
