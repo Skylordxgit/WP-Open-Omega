@@ -37,6 +37,12 @@ import './Chats.css';
 
 type MessageMedia = { mimetype: string; filename?: string; data?: string };
 
+// A chat as shown in the merged inbox carries the id of the channel (session) it came from, since
+// the same inbox can show chats pulled from several connected WhatsApp accounts at once.
+interface ChatWithSession extends Chat {
+  sessionId: string;
+}
+
 interface ChatMessageView extends ChatMessage {
   metadata?: {
     media?: MessageMedia;
@@ -107,15 +113,21 @@ export function Chats() {
   const [selectedSessionId, setSelectedSessionId] = useState<string>('');
   const [loadingSessions, setLoadingSessions] = useState<boolean>(true);
 
-  // Chats list
-  const [chats, setChats] = useState<Chat[]>([]);
+  // Chats list — merged from every selected channel
+  const [chats, setChats] = useState<ChatWithSession[]>([]);
   const [loadingChats, setLoadingChats] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [inboxView, setInboxView] = useState<'all' | 'unread' | 'direct' | 'groups'>('all');
   const [sortMode, setSortMode] = useState<'recent' | 'oldest'>('recent');
 
+  // Channels included in the inbox: one selected shows that account's chats only, several
+  // selected merge their chats together.
+  const [selectedChannelIds, setSelectedChannelIds] = useState<string[]>([]);
+  const [showChannelMenu, setShowChannelMenu] = useState<boolean>(false);
+  const channelMenuRef = useRef<HTMLDivElement | null>(null);
+
   // Selected chat & message history
-  const [activeChat, setActiveChat] = useState<Chat | null>(null);
+  const [activeChat, setActiveChat] = useState<ChatWithSession | null>(null);
   const [messages, setMessages] = useState<ChatMessageView[]>([]);
   const [loadingMessages, setLoadingMessages] = useState<boolean>(false);
   const [messageInput, setMessageInput] = useState<string>('');
@@ -149,6 +161,7 @@ export function Chats() {
         setSessions(readySessions);
         if (readySessions.length > 0) {
           setSelectedSessionId(readySessions[0].id);
+          setSelectedChannelIds(readySessions.map(s => s.id));
         }
       } catch (err) {
         showErrorToast(t('chats.errors.loadSessions'), err instanceof Error ? err.message : undefined);
@@ -159,18 +172,28 @@ export function Chats() {
     void loadSessions();
   }, [t, showErrorToast]);
 
-  // 2. Fetch chats when active session changes
+  // 2. Fetch chats for every selected channel and merge them into one inbox
   const loadChats = useCallback(
-    async (sessionId: string) => {
-      if (!sessionId) return;
+    async (sessionIds: string[]) => {
+      if (sessionIds.length === 0) {
+        setChats([]);
+        return;
+      }
       try {
         setLoadingChats(true);
-        const data = await sessionApi.getChats(sessionId);
-        const sorted = [...data].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-        setChats(sorted);
-      } catch (err) {
-        showErrorToast(t('chats.errors.loadChats'), err instanceof Error ? err.message : undefined);
-        setChats([]);
+        const perChannel = await Promise.all(
+          sessionIds.map(async sessionId => {
+            try {
+              const data = await sessionApi.getChats(sessionId);
+              return data.map(chat => ({ ...chat, sessionId }));
+            } catch (err) {
+              showErrorToast(t('chats.errors.loadChats'), err instanceof Error ? err.message : undefined);
+              return [];
+            }
+          }),
+        );
+        const merged = perChannel.flat().sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        setChats(merged);
       } finally {
         setLoadingChats(false);
       }
@@ -179,34 +202,32 @@ export function Chats() {
   );
 
   useEffect(() => {
-    if (selectedSessionId) {
-      void loadChats(selectedSessionId);
-      setActiveChat(null);
-      setMessages([]);
-      setAttachment(null);
-      setPreviewUrl(null);
-    }
-  }, [selectedSessionId, loadChats]);
+    void loadChats(selectedChannelIds);
+    setActiveChat(null);
+    setMessages([]);
+    setAttachment(null);
+    setPreviewUrl(null);
+  }, [selectedChannelIds, loadChats]);
 
   const markChatRead = useCallback(
-    (chatId: string) => {
-      void sessionApi.markChatRead(selectedSessionId, chatId).catch(err => {
+    (sessionId: string, chatId: string) => {
+      void sessionApi.markChatRead(sessionId, chatId).catch(err => {
         showWarningToast(t('chats.errors.markRead'), err instanceof Error ? err.message : undefined);
       });
     },
-    [selectedSessionId, t, showWarningToast],
+    [t, showWarningToast],
   );
 
   // 3. WebSocket integration for real-time messages
   const handleIncomingMessage = useCallback(
     (event: { sessionId: string; message: Record<string, unknown> }) => {
-      if (event.sessionId !== selectedSessionId) return;
+      if (!selectedChannelIds.includes(event.sessionId)) return;
 
       const newMsg = event.message as unknown as IncomingWsMessage;
 
       // Update message list if the message belongs to the currently active chat
-      if (activeChat && newMsg.chatId === activeChat.id) {
-        markChatRead(activeChat.id);
+      if (activeChat && newMsg.chatId === activeChat.id && event.sessionId === activeChat.sessionId) {
+        markChatRead(activeChat.sessionId, activeChat.id);
 
         const mappedMessage: ChatMessageView = {
           id: newMsg.id,
@@ -236,9 +257,11 @@ export function Chats() {
 
       // Update sidebar chat list
       setChats(prevChats => {
-        const chatIndex = prevChats.findIndex(c => c.id === newMsg.chatId);
+        const chatIndex = prevChats.findIndex(
+          c => c.id === newMsg.chatId && c.sessionId === event.sessionId,
+        );
         if (chatIndex === -1) {
-          void loadChats(selectedSessionId);
+          void loadChats(selectedChannelIds);
           return prevChats;
         }
 
@@ -247,7 +270,7 @@ export function Chats() {
         targetChat.lastMessage = newMsg.body;
         targetChat.timestamp = newMsg.timestamp;
 
-        if (!newMsg.fromMe && (!activeChat || activeChat.id !== targetChat.id)) {
+        if (!newMsg.fromMe && (!activeChat || activeChat.id !== targetChat.id || activeChat.sessionId !== event.sessionId)) {
           targetChat.unreadCount = (targetChat.unreadCount || 0) + 1;
         }
 
@@ -256,12 +279,12 @@ export function Chats() {
         return updatedChats;
       });
     },
-    [selectedSessionId, activeChat, loadChats, markChatRead],
+    [selectedChannelIds, activeChat, loadChats, markChatRead],
   );
 
   const handleIncomingMessageAck = useCallback(
     (event: { sessionId: string; messageId: string; status: ChatMessageView['status'] }) => {
-      if (event.sessionId !== selectedSessionId) return;
+      if (!activeChat || event.sessionId !== activeChat.sessionId) return;
 
       setMessages(prev =>
         prev.map(msg => {
@@ -274,12 +297,12 @@ export function Chats() {
         }),
       );
     },
-    [selectedSessionId],
+    [activeChat],
   );
 
   const handleIncomingMessageReaction = useCallback(
     (event: { sessionId: string; messageId: string; reactions: Record<string, string> }) => {
-      if (event.sessionId !== selectedSessionId) return;
+      if (!activeChat || event.sessionId !== activeChat.sessionId) return;
 
       setMessages(prev =>
         prev.map(msg => {
@@ -291,12 +314,12 @@ export function Chats() {
         }),
       );
     },
-    [selectedSessionId],
+    [activeChat],
   );
 
   const handleIncomingMessageRevoked = useCallback(
     (event: { sessionId: string; id: string; type: string }) => {
-      if (event.sessionId !== selectedSessionId) return;
+      if (!activeChat || event.sessionId !== activeChat.sessionId) return;
 
       setMessages(prev =>
         prev.map(msg => {
@@ -308,7 +331,7 @@ export function Chats() {
         }),
       );
     },
-    [selectedSessionId],
+    [activeChat],
   );
 
   const { isConnected, connectionFailed, reconnect, subscribe, unsubscribe } = useWebSocket({
@@ -319,28 +342,30 @@ export function Chats() {
   });
 
   useEffect(() => {
-    if (selectedSessionId && isConnected) {
-      subscribe(selectedSessionId, [
-        'message.received',
-        'message.sent',
-        'message.ack',
-        'message.reaction',
-        'message.revoked',
-      ]);
+    if (selectedChannelIds.length > 0 && isConnected) {
+      selectedChannelIds.forEach(sessionId => {
+        subscribe(sessionId, [
+          'message.received',
+          'message.sent',
+          'message.ack',
+          'message.reaction',
+          'message.revoked',
+        ]);
+      });
       return () => {
-        unsubscribe(selectedSessionId);
+        selectedChannelIds.forEach(sessionId => unsubscribe(sessionId));
       };
     }
-  }, [selectedSessionId, isConnected, subscribe, unsubscribe]);
+  }, [selectedChannelIds, isConnected, subscribe, unsubscribe]);
 
   // 4. Fetch message history for the selected chat
   const loadMessages = useCallback(
-    async (chatId: string) => {
-      if (!selectedSessionId || !chatId) return;
+    async (sessionId: string, chatId: string) => {
+      if (!sessionId || !chatId) return;
       try {
         setLoadingMessages(true);
-        markChatRead(chatId);
-        const data = await sessionApi.getChatMessages(selectedSessionId, chatId, 100);
+        markChatRead(sessionId, chatId);
+        const data = await sessionApi.getChatMessages(sessionId, chatId, 100);
         setMessages([...data.messages].reverse());
       } catch (err) {
         showErrorToast(t('chats.errors.loadMessages'), err instanceof Error ? err.message : undefined);
@@ -349,15 +374,15 @@ export function Chats() {
         setLoadingMessages(false);
       }
     },
-    [selectedSessionId, markChatRead, t, showErrorToast],
+    [markChatRead, t, showErrorToast],
   );
 
   const handleReactMessage = async (msg: ChatMessageView, emoji: string) => {
-    if (!selectedSessionId || !activeChat) return;
+    if (!activeChat) return;
 
     const msgId = msg.waMessageId || msg.id;
     const currentReactions = msg.metadata?.reactions || {};
-    const sessionPhone = sessions.find(s => s.id === selectedSessionId)?.phone || 'me';
+    const sessionPhone = sessions.find(s => s.id === activeChat.sessionId)?.phone || 'me';
 
     let alreadyReacted = false;
     for (const [sender, emo] of Object.entries(currentReactions)) {
@@ -370,7 +395,7 @@ export function Chats() {
     const emojiToSend = alreadyReacted ? '' : emoji;
 
     try {
-      await messageApi.react(selectedSessionId, {
+      await messageApi.react(activeChat.sessionId, {
         chatId: activeChat.id,
         messageId: msgId,
         emoji: emojiToSend,
@@ -397,13 +422,13 @@ export function Chats() {
   };
 
   const handleDeleteMessage = async (msg: ChatMessageView) => {
-    if (!selectedSessionId || !activeChat) return;
+    if (!activeChat) return;
     const msgId = msg.waMessageId || msg.id;
 
     if (!window.confirm(t('chats.deleteConfirm'))) return;
 
     try {
-      await messageApi.delete(selectedSessionId, {
+      await messageApi.delete(activeChat.sessionId, {
         chatId: activeChat.id,
         messageId: msgId,
         forEveryone: true,
@@ -424,12 +449,38 @@ export function Chats() {
 
   useEffect(() => {
     if (activeChat) {
-      void loadMessages(activeChat.id);
-      setChats(prev => prev.map(c => (c.id === activeChat.id ? { ...c, unreadCount: 0 } : c)));
+      void loadMessages(activeChat.sessionId, activeChat.id);
+      setChats(prev =>
+        prev.map(c =>
+          c.id === activeChat.id && c.sessionId === activeChat.sessionId ? { ...c, unreadCount: 0 } : c,
+        ),
+      );
     } else {
       setMessages([]);
     }
   }, [activeChat, loadMessages]);
+
+  // Close the channel filter dropdown when clicking outside of it
+  useEffect(() => {
+    if (!showChannelMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (channelMenuRef.current && !channelMenuRef.current.contains(e.target as Node)) {
+        setShowChannelMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showChannelMenu]);
+
+  const toggleChannelSelection = (sessionId: string) => {
+    setSelectedChannelIds(prev => {
+      if (prev.includes(sessionId)) {
+        if (prev.length === 1) return prev; // always keep at least one channel selected
+        return prev.filter(id => id !== sessionId);
+      }
+      return [...prev, sessionId];
+    });
+  };
 
   // 5. Scroll chat to bottom
   useEffect(() => {
@@ -474,7 +525,7 @@ export function Chats() {
   // 7. Handle sending a message / media
   const handleSend = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!selectedSessionId || !activeChat || sending) return;
+    if (!activeChat || sending) return;
 
     const textToSend = messageInput.trim();
     if (!textToSend && !attachment) return;
@@ -534,20 +585,20 @@ export function Chats() {
         else if (mime.startsWith('video/')) mediaType = 'video';
         else if (mime.startsWith('audio/')) mediaType = 'audio';
 
-        result = await messageApi.sendMedia(selectedSessionId, activeChat.id, mediaType, {
+        result = await messageApi.sendMedia(activeChat.sessionId, activeChat.id, mediaType, {
           base64: currentAttachment.base64,
           mimetype: currentAttachment.mimetype,
           filename: currentAttachment.filename,
           caption: mediaType !== 'audio' ? textToSend : undefined,
         });
       } else if (currentReplyingTo) {
-        result = await messageApi.reply(selectedSessionId, {
+        result = await messageApi.reply(activeChat.sessionId, {
           chatId: activeChat.id,
           quotedMessageId: currentReplyingTo.waMessageId || currentReplyingTo.id,
           text: textToSend,
         });
       } else {
-        result = await messageApi.sendText(selectedSessionId, activeChat.id, textToSend);
+        result = await messageApi.sendText(activeChat.sessionId, activeChat.id, textToSend);
       }
 
       setMessages(prev => {
@@ -792,10 +843,40 @@ export function Chats() {
                 <div className="chats-inbox-title">{inboxTitle}</div>
                 <div className="chats-inbox-subtitle">{inboxSubtitle}</div>
               </div>
-              <button type="button" className="chats-inbox-channel">
-                All channels
-                <ChevronDown size={16} />
-              </button>
+              <div className="chats-channel-filter" ref={channelMenuRef}>
+                <button
+                  type="button"
+                  className="chats-inbox-channel"
+                  onClick={() => setShowChannelMenu(v => !v)}
+                >
+                  {selectedChannelIds.length === sessions.length
+                    ? 'All channels'
+                    : `${selectedChannelIds.length} channel${selectedChannelIds.length === 1 ? '' : 's'}`}
+                  <ChevronDown size={16} />
+                </button>
+                {showChannelMenu && (
+                  <div className="chats-channel-menu">
+                    <div className="chats-channel-menu-header">
+                      <span>All channels</span>
+                      <span>{sessions.length}</span>
+                    </div>
+                    {sessions.map(s => {
+                      const checked = selectedChannelIds.includes(s.id);
+                      return (
+                        <label key={s.id} className="chats-channel-menu-item">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleChannelSelection(s.id)}
+                          />
+                          <span className="chats-channel-menu-name">{s.name}</span>
+                          <span className="chats-channel-menu-phone">{s.phone || t('chats.noPhone')}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="chats-inbox-toolbar">
