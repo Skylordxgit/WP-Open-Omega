@@ -75,6 +75,25 @@ interface ChatMessageView extends ChatMessage {
     quotedMessage?: { id: string; body: string };
     reactions?: Record<string, string>;
   };
+  text?: string;
+  caption?: string;
+  content?: string;
+  mediaUrl?: string;
+  fileUrl?: string;
+  previewUrl?: string;
+  url?: string;
+  filename?: string;
+  mimetype?: string;
+  size?: number;
+  filesize?: number;
+  data?: string;
+  t?: number;
+  fromMe?: boolean;
+  isMe?: boolean;
+  quotedMessage?: { id?: string; body?: string; text?: string };
+  quotedMsg?: { id?: string; body?: string; text?: string };
+  mentions?: string[];
+  mentionedJidList?: string[];
 }
 
 interface InboxChat extends Chat {
@@ -115,6 +134,19 @@ interface IncomingWsMessage {
   media?: MessageMedia;
   quotedMessage?: { id: string; body: string };
   metadata?: ChatMessageView['metadata'];
+  text?: string;
+  caption?: string;
+  content?: string;
+  mediaUrl?: string;
+  fileUrl?: string;
+  previewUrl?: string;
+  url?: string;
+  filename?: string;
+  mimetype?: string;
+  size?: number;
+  filesize?: number;
+  mentionedJidList?: string[];
+  mentions?: string[];
 }
 
 // Map an attachment MIME type to the neutral MessageType for the optimistic outgoing bubble, so the
@@ -175,6 +207,7 @@ const normalizeMessageMedia = (message: ChatMessageView): MessageMedia | null =>
   const mediaUrl =
     (typeof anyMessage.mediaUrl === 'string' && anyMessage.mediaUrl) ||
     (typeof anyMessage.fileUrl === 'string' && anyMessage.fileUrl) ||
+    (typeof anyMessage.deprecatedMms3Url === 'string' && anyMessage.deprecatedMms3Url) ||
     (typeof anyMessage.url === 'string' && anyMessage.url) ||
     (typeof anyMessage.previewUrl === 'string' && anyMessage.previewUrl) ||
     metadataMedia?.url ||
@@ -250,12 +283,38 @@ const formatFileSize = (size?: number) => {
 };
 
 const URL_PATTERN = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+const MENTION_PATTERN = /@(\d{6,})/g;
+
+const getMessageTimestamp = (message: ChatMessageView) => {
+  const anyMessage = message as ChatMessageView & Record<string, unknown>;
+  const fromMessage = typeof message.timestamp === 'number' ? message.timestamp : undefined;
+  const fromAltField = typeof anyMessage.t === 'number' ? anyMessage.t : undefined;
+  const fromCreatedAt = Number.isFinite(new Date(message.createdAt).getTime())
+    ? Math.floor(new Date(message.createdAt).getTime() / 1000)
+    : 0;
+  return fromMessage ?? fromAltField ?? fromCreatedAt;
+};
+
+const getMessageKey = (message: ChatMessageView) => {
+  const anyMessage = message as ChatMessageView & Record<string, unknown>;
+  const primary = message.waMessageId || message.id;
+  if (primary) return primary;
+  return [
+    typeof anyMessage.chatId === 'string' ? anyMessage.chatId : '',
+    typeof anyMessage.from === 'string' ? anyMessage.from : '',
+    typeof anyMessage.to === 'string' ? anyMessage.to : '',
+    getMessageTimestamp(message),
+    typeof anyMessage.type === 'string' ? anyMessage.type : '',
+    typeof anyMessage.body === 'string' ? anyMessage.body : '',
+  ].join('::');
+};
 
 const getMessageText = (message: ChatMessageView): string => {
   const anyMessage = message as ChatMessageView & Record<string, unknown>;
   return (
     (typeof anyMessage.caption === 'string' && anyMessage.caption) ||
     (typeof anyMessage.text === 'string' && anyMessage.text) ||
+    (typeof anyMessage.content === 'string' && anyMessage.content) ||
     message.body ||
     ''
   );
@@ -274,22 +333,6 @@ const getQuotedMessageBody = (message: ChatMessageView): string | null => {
 
   if (!quoted) return null;
   return quoted.body || ('text' in quoted && typeof quoted.text === 'string' ? quoted.text : '') || null;
-};
-
-const renderLinkedText = (text: string): ReactNode => {
-  const parts = text.split(URL_PATTERN);
-  return parts.map((part, index) => {
-    if (!part) return null;
-    const isUrl = URL_PATTERN.test(part);
-    URL_PATTERN.lastIndex = 0;
-    if (!isUrl) return <span key={`${part}-${index}`}>{part}</span>;
-    const href = part.startsWith('http') ? part : `https://${part}`;
-    return (
-      <a key={`${href}-${index}`} href={href} target="_blank" rel="noreferrer" className="message-link">
-        {part}
-      </a>
-    );
-  });
 };
 
 const resolveAttachment = (message: ChatMessageView): ResolvedMediaAttachment | null => {
@@ -343,7 +386,8 @@ const inferMediaFromBody = (body?: string): MessageMedia | null => {
   return { mimetype: 'application/octet-stream', data: trimmed, filename: 'attachment.bin' };
 };
 
-const CHAT_HISTORY_LIMIT = 300;
+const CHAT_HISTORY_LIMIT = 200;
+const CHAT_HISTORY_INCREMENT = 200;
 const CHAT_STATUS_STORAGE_KEY = 'openwa_chat_statuses_v1';
 
 const normalizeContactNumber = (value?: string | null) => (value || '').replace(/[^0-9+]/g, '').trim();
@@ -363,44 +407,52 @@ const loadStoredChatStatuses = (): Record<string, 'open' | 'closed'> => {
 
 const sortMessagesAscending = (items: ChatMessageView[]) =>
   [...items].sort((a, b) => {
-    const aTime = a.timestamp || Math.floor(new Date(a.createdAt).getTime() / 1000);
-    const bTime = b.timestamp || Math.floor(new Date(b.createdAt).getTime() / 1000);
+    const aTime = getMessageTimestamp(a);
+    const bTime = getMessageTimestamp(b);
     return aTime - bTime;
   });
 
-const mapLiveHistoryMessage = (message: LiveChatHistoryMessage): ChatMessageView => ({
-  id: message.id,
-  waMessageId: message.id,
-  chatId: message.chatId,
-  from: message.from,
-  to: message.to,
-  body: message.body,
-  type: asMessageType(message.type),
-  direction: message.fromMe ? 'outgoing' : 'incoming',
-  status: message.fromMe ? 'sent' : 'read',
-  timestamp: message.timestamp,
-  createdAt: new Date(message.timestamp * 1000).toISOString(),
-  metadata: {
-    media: message.media,
-    quotedMessage: message.quotedMessage,
-  },
-});
+const mapLiveHistoryMessage = (message: LiveChatHistoryMessage): ChatMessageView => {
+  const rawMessage = message as LiveChatHistoryMessage & Record<string, unknown>;
+  return {
+    ...(rawMessage as Partial<ChatMessageView>),
+    id: message.id,
+    waMessageId: message.id,
+    chatId: message.chatId,
+    from: message.from,
+    to: message.to,
+    body: message.body,
+    type: asMessageType(message.type),
+    direction: message.fromMe ? 'outgoing' : 'incoming',
+    status: message.fromMe ? 'sent' : 'read',
+    timestamp: message.timestamp,
+    createdAt: new Date(message.timestamp * 1000).toISOString(),
+    metadata: {
+      ...(typeof rawMessage.metadata === 'object' && rawMessage.metadata ? (rawMessage.metadata as ChatMessageView['metadata']) : {}),
+      media: message.media,
+      quotedMessage: message.quotedMessage,
+    },
+  };
+};
 
 const mergeMessageSources = (liveMessages: ChatMessageView[], storedMessages: ChatMessageView[]) => {
   const merged = new Map<string, ChatMessageView>();
+  let duplicateCount = 0;
 
   for (const message of liveMessages) {
-    merged.set(message.waMessageId || message.id, message);
+    merged.set(getMessageKey(message), message);
   }
 
   for (const message of storedMessages) {
-    const key = message.waMessageId || message.id;
+    const key = getMessageKey(message);
     const existing = merged.get(key);
 
     if (!existing) {
       merged.set(key, message);
       continue;
     }
+
+    duplicateCount += 1;
 
     merged.set(key, {
       ...existing,
@@ -413,7 +465,10 @@ const mergeMessageSources = (liveMessages: ChatMessageView[], storedMessages: Ch
     });
   }
 
-  return sortMessagesAscending(Array.from(merged.values()));
+  return {
+    messages: sortMessagesAscending(Array.from(merged.values())),
+    duplicateCount,
+  };
 };
 
 export function Chats() {
@@ -445,6 +500,10 @@ export function Chats() {
   const [activeChat, setActiveChat] = useState<InboxChat | null>(null);
   const [messages, setMessages] = useState<ChatMessageView[]>([]);
   const [loadingMessages, setLoadingMessages] = useState<boolean>(false);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState<boolean>(false);
+  const [messageLoadError, setMessageLoadError] = useState<string | null>(null);
+  const [hasMoreMessages, setHasMoreMessages] = useState<boolean>(false);
+  const [messageHistoryLimit, setMessageHistoryLimit] = useState<number>(CHAT_HISTORY_LIMIT);
   const [messageInput, setMessageInput] = useState<string>('');
   const [sending, setSending] = useState<boolean>(false);
 
@@ -472,8 +531,115 @@ export function Chats() {
 
   // References
   const chatBottomRef = useRef<HTMLDivElement | null>(null);
+  const messageLoadRequestRef = useRef(0);
+  const skipNextAutoScrollRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [replyingTo, setReplyingTo] = useState<ChatMessageView | null>(null);
+
+  const isSessionReadyForMessages = useCallback((sessionId: string) => {
+    const status = (sessionStatusById[sessionId] || '').toLowerCase();
+    return !status || ['ready', 'connected', 'open'].includes(status);
+  }, [sessionStatusById]);
+
+  const contactNameByNumber = useCallback(
+    (value: string) => {
+      const normalized = normalizeContactNumber(value);
+      if (!normalized) return null;
+
+      const savedMatch = savedContacts.find(contact => normalizeContactNumber(contact.number) === normalized);
+      if (savedMatch?.name) return savedMatch.name;
+
+      const chatMatch = chats.find(chat => normalizeContactNumber(chat.id.split('@')[0]) === normalized);
+      return chatMatch?.name || null;
+    },
+    [savedContacts, chats],
+  );
+
+  const renderMessageBody = useCallback(
+    (text: string): ReactNode => {
+      const renderPlainSegment = (segment: string, segmentKey: string) => {
+        const parts: ReactNode[] = [];
+        let cursor = 0;
+        let matchIndex = 0;
+
+        for (const match of segment.matchAll(MENTION_PATTERN)) {
+          const fullMatch = match[0];
+          const mentionDigits = match[1];
+          const start = match.index ?? 0;
+
+          if (start > cursor) {
+            parts.push(<span key={`${segmentKey}-text-${matchIndex}`}>{segment.slice(cursor, start)}</span>);
+          }
+
+          const resolvedName = contactNameByNumber(mentionDigits);
+          parts.push(
+            <span key={`${segmentKey}-mention-${matchIndex}`} className="message-mention">
+              @{resolvedName || mentionDigits}
+            </span>,
+          );
+
+          cursor = start + fullMatch.length;
+          matchIndex += 1;
+        }
+
+        if (cursor < segment.length) {
+          parts.push(<span key={`${segmentKey}-tail`}>{segment.slice(cursor)}</span>);
+        }
+
+        return parts.length > 0 ? parts : [<span key={`${segmentKey}-full`}>{segment}</span>];
+      };
+
+      const linkedParts = text.split(URL_PATTERN);
+      return linkedParts.map((part, index) => {
+        if (!part) return null;
+        const isUrl = URL_PATTERN.test(part);
+        URL_PATTERN.lastIndex = 0;
+        if (!isUrl) {
+          return <span key={`body-${index}`}>{renderPlainSegment(part, `body-${index}`)}</span>;
+        }
+
+        const href = part.startsWith('http') ? part : `https://${part}`;
+        return (
+          <a key={`${href}-${index}`} href={href} target="_blank" rel="noreferrer" className="message-link">
+            {part}
+          </a>
+        );
+      });
+    },
+    [contactNameByNumber],
+  );
+
+  const getMessageFallbackLabel = useCallback((message: ChatMessageView) => {
+    if (message.type === 'revoked') return t('chats.messageDeleted');
+    if (message.type === 'sticker') return 'Sticker';
+    if (message.type === 'location') return 'Location shared';
+    if (message.type === 'contact') return 'Contact card';
+    return 'Unsupported message type';
+  }, [t]);
+
+  const getRenderableMessageInfo = useCallback(
+    (message: ChatMessageView) => {
+      const attachment = resolveAttachment(message);
+      const messageText = getMessageText(message).trim();
+      const quotedMessageBody = getQuotedMessageBody(message);
+      const hasText = Boolean(messageText);
+      const hasQuote = Boolean(quotedMessageBody);
+      const isRevoked = message.type === 'revoked';
+      const isSupportedSystemMessage = ['sticker', 'location', 'contact'].includes(message.type);
+      const hasRenderableContent = isRevoked || hasText || Boolean(attachment) || hasQuote || isSupportedSystemMessage;
+      const shouldRenderFallback = !hasRenderableContent && message.type !== 'text';
+
+      return {
+        attachment,
+        messageText,
+        quotedMessageBody,
+        shouldRender: hasRenderableContent,
+        shouldRenderFallback,
+        fallbackLabel: shouldRenderFallback ? getMessageFallbackLabel(message) : '',
+      };
+    },
+    [getMessageFallbackLabel],
+  );
 
   // Popular emojis
   const popularEmojis = ['😀', '😂', '👍', '❤️', '🔥', '👏', '🙏', '🎉', '💡', '🤔', '😅', '😍', '😊', '😭', '😎', '😜', '🚀', '✨'];
@@ -611,15 +777,14 @@ export function Chats() {
 
   const markChatRead = useCallback(
     (sessionId: string, chatId: string) => {
-      const currentStatus = sessionStatusById[sessionId];
-      if (!sessionId || currentStatus && currentStatus !== 'ready') {
+      if (!sessionId || !isSessionReadyForMessages(sessionId)) {
         return;
       }
       void sessionApi.markChatRead(sessionId, chatId).catch(err => {
         showWarningToast(t('chats.errors.markRead'), err instanceof Error ? err.message : undefined);
       });
     },
-    [sessionStatusById, t, showWarningToast],
+    [isSessionReadyForMessages, t, showWarningToast],
   );
 
   // 3. WebSocket integration for real-time messages
@@ -634,12 +799,13 @@ export function Chats() {
         markChatRead(activeChat.sessionId, activeChat.id);
 
         const mappedMessage: ChatMessageView = {
+          ...(newMsg as Partial<ChatMessageView>),
           id: newMsg.id,
           waMessageId: newMsg.id,
           chatId: newMsg.chatId,
           from: newMsg.from,
           to: newMsg.to,
-          body: newMsg.body,
+          body: newMsg.body || newMsg.text || newMsg.caption || newMsg.content || '',
           type: asMessageType(newMsg.type),
           direction: newMsg.fromMe ? 'outgoing' : 'incoming',
           status: 'sent',
@@ -651,11 +817,32 @@ export function Chats() {
           },
         };
 
+        const mappedInfo = getRenderableMessageInfo(mappedMessage);
+        if (!mappedInfo.shouldRender && !mappedInfo.shouldRenderFallback) {
+          console.debug('[Chats] skipped live message', {
+            selectedChatId: activeChat.id,
+            sessionId: activeChat.sessionId,
+            messageId: mappedMessage.id,
+            type: mappedMessage.type,
+          });
+          return;
+        }
+
         setMessages(prev => {
-          if (prev.some(m => m.id === mappedMessage.id || m.waMessageId === mappedMessage.id)) {
+          if (prev.some(m => getMessageKey(m) === getMessageKey(mappedMessage))) {
             return prev;
           }
-          return [...prev, mappedMessage];
+          const nextMessage =
+            mappedInfo.shouldRender
+              ? mappedMessage
+              : {
+                  ...mappedMessage,
+                  body: mappedInfo.fallbackLabel,
+                  text: mappedInfo.fallbackLabel,
+                  content: mappedInfo.fallbackLabel,
+                  type: 'unknown' as const,
+                };
+          return sortMessagesAscending([...prev, nextMessage]);
         });
       }
 
@@ -681,7 +868,7 @@ export function Chats() {
         return updatedChats;
       });
     },
-    [selectedChannelIds, activeChat, loadChats, markChatRead],
+    [selectedChannelIds, activeChat, getRenderableMessageInfo, loadChats, markChatRead],
   );
 
   const handleIncomingMessageAck = useCallback(
@@ -773,15 +960,29 @@ export function Chats() {
 
   // 4. Fetch message history for the selected chat
   const loadMessages = useCallback(
-    async (sessionId: string, chatId: string) => {
+    async (sessionId: string, chatId: string, limit = CHAT_HISTORY_LIMIT, options?: { preserveScroll?: boolean }) => {
       if (!sessionId || !chatId) return;
-      try {
+      const requestId = ++messageLoadRequestRef.current;
+      const shouldPreserveScroll = options?.preserveScroll === true;
+      if (shouldPreserveScroll) {
+        skipNextAutoScrollRef.current = true;
+        setLoadingOlderMessages(true);
+      } else {
         setLoadingMessages(true);
+      }
+      setMessageLoadError(null);
+
+      try {
         markChatRead(sessionId, chatId);
+        const liveLimit = Math.min(limit, 100);
         const [storedResult, liveResult] = await Promise.allSettled([
-          sessionApi.getChatMessages(sessionId, chatId, CHAT_HISTORY_LIMIT),
-          sessionApi.getChatHistory(sessionId, chatId, CHAT_HISTORY_LIMIT, false),
+          sessionApi.getChatMessages(sessionId, chatId, limit),
+          sessionApi.getChatHistory(sessionId, chatId, liveLimit, true),
         ]);
+
+        if (requestId !== messageLoadRequestRef.current) {
+          return;
+        }
 
         const storedMessages =
           storedResult.status === 'fulfilled' ? sortMessagesAscending(storedResult.value.messages) : [];
@@ -789,20 +990,61 @@ export function Chats() {
         const liveMessages =
           liveResult.status === 'fulfilled' ? liveResult.value.map(mapLiveHistoryMessage) : [];
 
-        if (liveMessages.length > 0) {
-          setMessages(mergeMessageSources(liveMessages, storedMessages));
+        const mergedResult = mergeMessageSources(liveMessages, storedMessages);
+        const normalizedMessages = mergedResult.messages
+          .filter(message => {
+            const info = getRenderableMessageInfo(message);
+            return info.shouldRender || info.shouldRenderFallback;
+          })
+          .map(message => {
+            const info = getRenderableMessageInfo(message);
+            if (info.shouldRender) return message;
+            return {
+              ...message,
+              body: info.fallbackLabel,
+              text: info.fallbackLabel,
+              content: info.fallbackLabel,
+              type: 'unknown' as const,
+            } satisfies ChatMessageView;
+          });
+        const skippedEmptyMessages = mergedResult.messages.length - normalizedMessages.length;
+        const storedTotal = storedResult.status === 'fulfilled' ? storedResult.value.total : storedMessages.length;
+        const maybeHasMore = storedTotal > normalizedMessages.length || storedMessages.length >= limit;
+
+        console.debug('[Chats] message load', {
+          selectedChatId: chatId,
+          sessionId,
+          requestedLimit: limit,
+          storedFetched: storedMessages.length,
+          storedTotal,
+          liveFetched: liveMessages.length,
+          totalMessagesFetched: storedMessages.length + liveMessages.length,
+          totalMessagesRendered: normalizedMessages.length,
+          duplicatesRemoved: mergedResult.duplicateCount,
+          unsupportedOrEmptySkipped: skippedEmptyMessages,
+          paginationCursor: `limit:${limit}`,
+          hasMore: maybeHasMore,
+        });
+
+        setMessages(normalizedMessages);
+        setHasMoreMessages(maybeHasMore);
+      } catch (err) {
+        if (requestId !== messageLoadRequestRef.current) {
           return;
         }
-
-        setMessages(storedMessages);
-      } catch (err) {
-        showErrorToast(t('chats.errors.loadMessages'), err instanceof Error ? err.message : undefined);
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+        showErrorToast(t('chats.errors.loadMessages'), errorMessage);
+        setMessageLoadError(errorMessage);
         setMessages([]);
+        setHasMoreMessages(false);
       } finally {
-        setLoadingMessages(false);
+        if (requestId === messageLoadRequestRef.current) {
+          setLoadingMessages(false);
+          setLoadingOlderMessages(false);
+        }
       }
     },
-    [markChatRead, t, showErrorToast],
+    [getRenderableMessageInfo, markChatRead, t, showErrorToast],
   );
 
   const handleReactMessage = async (msg: ChatMessageView, emoji: string) => {
@@ -877,19 +1119,49 @@ export function Chats() {
 
   useEffect(() => {
     if (activeChat) {
-      void loadMessages(activeChat.sessionId, activeChat.id);
+      setMessageHistoryLimit(CHAT_HISTORY_LIMIT);
+      setMessageLoadError(null);
+      setHasMoreMessages(false);
+      skipNextAutoScrollRef.current = false;
+      void loadMessages(activeChat.sessionId, activeChat.id, CHAT_HISTORY_LIMIT);
       setChats(prev =>
         prev.map(c => (c.id === activeChat.id && c.sessionId === activeChat.sessionId ? { ...c, unreadCount: 0 } : c)),
       );
     } else {
+      messageLoadRequestRef.current += 1;
       setMessages([]);
+      setMessageLoadError(null);
+      setHasMoreMessages(false);
     }
   }, [activeChat, loadMessages]);
 
   // 5. Scroll chat to bottom
   useEffect(() => {
+    if (skipNextAutoScrollRef.current) {
+      skipNextAutoScrollRef.current = false;
+      return;
+    }
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  useEffect(() => {
+    if (!activeChat || !messageLoadError || !isSessionReadyForMessages(activeChat.sessionId)) {
+      return;
+    }
+
+    const retryTimer = window.setTimeout(() => {
+      void loadMessages(activeChat.sessionId, activeChat.id, messageHistoryLimit);
+    }, 1800);
+
+    return () => window.clearTimeout(retryTimer);
+  }, [activeChat, isSessionReadyForMessages, loadMessages, messageHistoryLimit, messageLoadError]);
+
+  const handleLoadOlderMessages = useCallback(() => {
+    if (!activeChat || loadingOlderMessages) return;
+    const nextLimit = messageHistoryLimit + CHAT_HISTORY_INCREMENT;
+    setMessageHistoryLimit(nextLimit);
+    void loadMessages(activeChat.sessionId, activeChat.id, nextLimit, { preserveScroll: true });
+  }, [activeChat, loadMessages, loadingOlderMessages, messageHistoryLimit]);
 
   // 6. Handle file selection & base64 conversion
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1624,6 +1896,32 @@ export function Chats() {
                   <div className="room-thread">
                 {/* Scroll fix: only the message history region grows and scrolls. */}
                 <div className="room-messages">
+                  {hasMoreMessages && (
+                    <div className="messages-pagination-row">
+                      <button
+                        type="button"
+                        className="messages-load-older-btn"
+                        onClick={handleLoadOlderMessages}
+                        disabled={loadingOlderMessages}
+                      >
+                        {loadingOlderMessages ? <Loader2 className="animate-spin" size={14} /> : null}
+                        <span>{loadingOlderMessages ? 'Loading older messages...' : 'Load older messages'}</span>
+                      </button>
+                    </div>
+                  )}
+                  {messageLoadError && !loadingMessages && (
+                    <div className="messages-inline-error" role="status">
+                      <AlertCircle size={16} />
+                      <span>{messageLoadError}</span>
+                      <button
+                        type="button"
+                        className="messages-retry-btn"
+                        onClick={() => activeChat && void loadMessages(activeChat.sessionId, activeChat.id, messageHistoryLimit)}
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  )}
                   {loadingMessages ? (
                     <div className="messages-loading">
                       <Loader2 className="animate-spin" size={32} />
@@ -1638,13 +1936,11 @@ export function Chats() {
                     messages.map(msg => {
                       const anyMessage = msg as ChatMessageView & Record<string, unknown>;
                       const isMe = msg.direction === 'outgoing' || anyMessage.fromMe === true || anyMessage.isMe === true;
-                      const formattedTime = formatTime(
-                        msg.timestamp || Math.floor(new Date(msg.createdAt).getTime() / 1000),
-                      );
-                      const messageText = getMessageText(msg);
-                      const quotedMessageBody = getQuotedMessageBody(msg);
-
-                      const attachmentInfo = resolveAttachment(msg);
+                      const formattedTime = formatTime(getMessageTimestamp(msg));
+                      const renderInfo = getRenderableMessageInfo(msg);
+                      const messageText = renderInfo.messageText;
+                      const quotedMessageBody = renderInfo.quotedMessageBody;
+                      const attachmentInfo = renderInfo.attachment;
                       const isMediaMessage = msg.type !== 'text' || !!attachmentInfo;
 
                       const renderMedia = () => {
@@ -1755,10 +2051,16 @@ export function Chats() {
                       const reactions = msg.metadata?.reactions || {};
                       const hasReactions = Object.keys(reactions).length > 0;
                       const isRevoked = msg.type === 'revoked';
+                      const shouldRenderMessageText =
+                        !isRevoked &&
+                        (attachmentInfo?.caption || messageText) &&
+                        (!attachmentInfo ||
+                          ((attachmentInfo.caption || messageText) !== attachmentInfo.filename &&
+                            (attachmentInfo.caption || messageText) !== attachmentInfo.src));
 
                       return (
                         <div
-                          key={msg.id}
+                          key={getMessageKey(msg)}
                           className={`message-bubble-wrapper ${isMe ? 'outgoing' : 'incoming'}`}
                         >
                           <div className="message-bubble-container">
@@ -1778,11 +2080,12 @@ export function Chats() {
 
                               {isRevoked ? (
                                 <div className="message-text">{t('chats.messageDeleted')}</div>
+                              ) : shouldRenderMessageText ? (
+                                <div className="message-text">{renderMessageBody(attachmentInfo?.caption || messageText)}</div>
+                              ) : !renderInfo.shouldRender ? (
+                                <div className="message-text message-text-fallback">{renderInfo.fallbackLabel}</div>
                               ) : (
-                                (attachmentInfo?.caption || messageText) &&
-                                (!attachmentInfo || (messageText !== attachmentInfo.filename && messageText !== attachmentInfo.src)) && (
-                                  <div className="message-text">{renderLinkedText(attachmentInfo?.caption || messageText)}</div>
-                                )
+                                null
                               )}
 
                               <div className="message-meta">
