@@ -21,6 +21,10 @@ import {
   Clock3,
   Info,
   Mic,
+  FileText,
+  Film,
+  Music,
+  Image as ImageIcon,
 } from 'lucide-react';
 import {
   sessionApi,
@@ -102,6 +106,67 @@ const getMediaSrc = (media?: MessageMedia): string => {
     return media.data;
   }
   return `data:${media.mimetype};base64,${media.data}`;
+};
+
+// Derive an uppercase file extension from a filename for the document chip badge. Presentation
+// only — does not alter the stored filename or media data.
+const getFileExtension = (filename?: string): string => {
+  if (!filename) return '';
+  const dot = filename.lastIndexOf('.');
+  if (dot <= 0 || dot === filename.length - 1) return '';
+  return filename.slice(dot + 1).toUpperCase();
+};
+
+// If a quoted preview body is a bare media marker like "[image]", return the media kind so the UI
+// can show an icon + readable label instead of literal brackets. Uses only the existing body.
+const getQuotedMediaType = (body?: string): string | null => {
+  if (!body) return null;
+  const match = body.trim().match(/^\[(image|video|audio|voice|document|sticker)\]$/i);
+  return match ? match[1].toLowerCase() : null;
+};
+
+// Turn URLs inside displayed message text into safe new-tab links. This transforms only what is
+// rendered (no innerHTML, no change to the stored/sent body). `pre-wrap` on .message-text keeps
+// the original line breaks in the plain-text segments.
+const URL_PATTERN = /(https?:\/\/[^\s]+)/g;
+const renderTextWithLinks = (text: string): React.ReactNode => {
+  if (!text) return text;
+  return text.split(URL_PATTERN).map((segment, index) =>
+    /^https?:\/\//.test(segment) ? (
+      <a key={index} href={segment} target="_blank" rel="noopener noreferrer">
+        {segment}
+      </a>
+    ) : (
+      segment
+    ),
+  );
+};
+
+// Icon for a quoted media marker (see getQuotedMediaType). Kept here so the renderer stays tidy.
+const QuotedMediaIcon = ({ type }: { type: string }) => {
+  switch (type) {
+    case 'image':
+    case 'sticker':
+      return <ImageIcon size={13} />;
+    case 'video':
+      return <Film size={13} />;
+    case 'audio':
+      return <Music size={13} />;
+    case 'voice':
+      return <Mic size={13} />;
+    case 'document':
+    default:
+      return <FileText size={13} />;
+  }
+};
+
+const QUOTE_MEDIA_LABELS: Record<string, string> = {
+  image: 'Photo',
+  video: 'Video',
+  audio: 'Audio',
+  voice: 'Voice message',
+  document: 'Document',
+  sticker: 'Sticker',
 };
 
 export function Chats() {
@@ -1033,8 +1098,17 @@ export function Chats() {
                         if (!mediaSrc) return null;
 
                         switch (msg.type) {
-                          case 'image':
                           case 'sticker':
+                            return (
+                              <div className="message-media-sticker">
+                                <img
+                                  src={mediaSrc}
+                                  alt={mediaInfo.filename || 'Sticker'}
+                                  className="chat-sticker-media"
+                                />
+                              </div>
+                            );
+                          case 'image':
                             return (
                               <div className="message-media-image">
                                 <img
@@ -1050,15 +1124,24 @@ export function Chats() {
                                 <video src={mediaSrc} controls className="chat-video-media" />
                               </div>
                             );
-                          case 'audio':
                           case 'voice':
+                            return (
+                              <div className="message-media-voice">
+                                <span className="voice-mic" aria-hidden="true">
+                                  <Mic size={16} />
+                                </span>
+                                <audio src={mediaSrc} controls className="chat-audio-media" />
+                              </div>
+                            );
+                          case 'audio':
                             return (
                               <div className="message-media-audio">
                                 <audio src={mediaSrc} controls className="chat-audio-media" />
                               </div>
                             );
                           case 'document':
-                          default:
+                          default: {
+                            const ext = getFileExtension(mediaInfo.filename);
                             return (
                               <div className="message-media-document">
                                 <a
@@ -1066,16 +1149,30 @@ export function Chats() {
                                   download={mediaInfo.filename || 'document'}
                                   className="chat-document-media"
                                 >
-                                  📎 {mediaInfo.filename || t('chats.downloadDocument')}
+                                  <span className="doc-icon">
+                                    <FileText size={20} />
+                                    {ext && <span className="doc-ext">{ext}</span>}
+                                  </span>
+                                  <span className="doc-info">
+                                    <span className="doc-name">
+                                      {mediaInfo.filename || t('chats.downloadDocument')}
+                                    </span>
+                                    <span className="doc-sub">
+                                      {ext ? `${ext} file` : t('chats.downloadDocument')}
+                                    </span>
+                                  </span>
                                 </a>
                               </div>
                             );
+                          }
                         }
                       };
 
                       const reactions = msg.metadata?.reactions || {};
                       const hasReactions = Object.keys(reactions).length > 0;
                       const isRevoked = msg.type === 'revoked';
+                      const quotedBody = msg.metadata?.quotedMessage?.body;
+                      const quotedMediaType = getQuotedMediaType(quotedBody);
 
                       return (
                         <div
@@ -1086,12 +1183,21 @@ export function Chats() {
                             <div
                               className={`message-bubble ${isMe ? 'outgoing' : 'incoming'} ${msg.status} ${
                                 isMediaMessage ? 'media-type' : ''
-                              } ${isRevoked ? 'revoked-type' : ''}`}
+                              } ${msg.type === 'sticker' ? 'sticker-type' : ''} ${
+                                isRevoked ? 'revoked-type' : ''
+                              }`}
                             >
                               {/* Quoted message display */}
                               {msg.metadata?.quotedMessage && (
                                 <div className="message-quote-box">
-                                  <div className="quote-body">{msg.metadata.quotedMessage.body}</div>
+                                  {quotedMediaType ? (
+                                    <div className="quote-media-label">
+                                      <QuotedMediaIcon type={quotedMediaType} />
+                                      <span>{QUOTE_MEDIA_LABELS[quotedMediaType] || quotedMediaType}</span>
+                                    </div>
+                                  ) : (
+                                    <div className="quote-body">{quotedBody}</div>
+                                  )}
                                 </div>
                               )}
 
@@ -1102,7 +1208,7 @@ export function Chats() {
                               ) : (
                                 msg.body &&
                                 (!mediaInfo || msg.body !== mediaInfo.filename) && (
-                                  <div className="message-text">{msg.body}</div>
+                                  <div className="message-text">{renderTextWithLinks(msg.body)}</div>
                                 )
                               )}
 

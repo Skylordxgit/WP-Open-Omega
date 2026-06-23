@@ -1466,6 +1466,136 @@
   padding: 0.1rem 0.35rem 0;
 }
 
+/* --- Stickers: transparent, borderless, small (WhatsApp-like) --- */
+.message-media-sticker {
+  display: inline-block;
+}
+
+.chat-sticker-media {
+  max-width: 128px;
+  max-height: 128px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+}
+
+.message-bubble.sticker-type {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+}
+
+.message-bubble.sticker-type .message-meta {
+  margin-top: 0.2rem;
+}
+
+[data-theme='dark'] .message-bubble.sticker-type {
+  background: transparent;
+}
+
+/* --- Voice notes: mic affordance + control, visually distinct from plain audio --- */
+.message-media-voice {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.45rem 0.3rem 0.3rem;
+  margin-bottom: 0.35rem;
+  background: rgba(37, 99, 235, 0.06);
+  border-radius: 999px;
+  max-width: 100%;
+}
+
+.voice-mic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.message-media-voice .chat-audio-media {
+  width: 200px;
+  height: 36px;
+  margin-bottom: 0;
+}
+
+[data-theme='dark'] .message-media-voice {
+  background: rgba(37, 99, 235, 0.16);
+}
+
+/* --- Document chip internals: icon tile + extension badge + name/sub --- */
+.doc-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  background: rgba(37, 99, 235, 0.1);
+  color: #2563eb;
+  flex-shrink: 0;
+}
+
+.doc-ext {
+  position: absolute;
+  bottom: -5px;
+  right: -4px;
+  padding: 0 3px;
+  font-size: 0.52rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.45;
+  color: #fff;
+  background: #2563eb;
+  border-radius: 4px;
+  border: 1.5px solid var(--bg-light);
+}
+
+.doc-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  min-width: 0;
+}
+
+.doc-name {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.doc-sub {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+/* --- Quoted media marker (e.g. "[image]") shown as icon + label, not raw brackets --- */
+.quote-media-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.quote-media-label svg {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
 /* =============================================================================
    HOVER MENU, REPLIES, REACTIONS, AND DELETIONS
    ============================================================================= */
