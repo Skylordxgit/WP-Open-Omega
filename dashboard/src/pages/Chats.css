@@ -6,73 +6,54 @@
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  background:
-    radial-gradient(circle at top left, rgba(34, 197, 94, 0.06), transparent 28%),
-    linear-gradient(180deg, #fbfdff 0%, #f3f7fc 100%);
+  background: #f3f5f9;
 }
 
 /* Conversation must dominate: keep the two side columns tight so the room gets the rest. */
 .chats-layout {
   display: grid;
-  grid-template-columns: 208px 312px minmax(0, 1fr);
+  grid-template-columns: 200px 304px minmax(0, 1fr);
   flex: 1;
   min-height: 0;
-  background: rgba(255, 255, 255, 0.85);
+  background: #fff;
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 10px;
   overflow: hidden;
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.07);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
   height: min(100%, calc(100dvh - 6rem));
-  backdrop-filter: blur(12px);
 }
 
 .chats-rail {
   border-right: 1px solid rgba(148, 163, 184, 0.18);
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, #f8fbff 0%, #f1f6ff 100%);
+  background: #f8fafc;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 
 .chats-rail-brand {
-  padding: 0.9rem 1rem;
+  height: 50px;
+  min-height: 50px;
+  max-height: 56px;
+  padding: 0 0.85rem;
   border-bottom: 1px solid rgba(148, 163, 184, 0.18);
   display: flex;
   align-items: center;
-  gap: 0.65rem;
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: linear-gradient(180deg, rgba(248, 251, 255, 0.98) 0%, rgba(241, 246, 255, 0.96) 100%);
-  backdrop-filter: blur(14px);
-}
-
-.chats-rail-brand-icon {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #2563eb, #22c55e);
-  color: #fff;
+  gap: 0.45rem;
   flex-shrink: 0;
-  box-shadow: 0 6px 14px rgba(37, 99, 235, 0.16);
+  color: #64748b;
+  background: #f8fafc;
 }
 
 .chats-rail-brand-title {
-  font-size: 1.05rem;
+  font-size: 0.78rem;
   font-weight: 700;
-  color: #0f172a;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #475569;
   line-height: 1.2;
-}
-
-.chats-rail-brand-subtitle {
-  margin-top: 0.1rem;
-  font-size: 0.72rem;
-  color: #64748b;
 }
 
 .chats-rail-group {
@@ -236,7 +217,7 @@
   border-right: 1px solid rgba(148, 163, 184, 0.18);
   display: flex;
   flex-direction: column;
-  background: rgba(255, 255, 255, 0.66);
+  background: #fff;
   min-height: 0;
   overflow: hidden;
 }
@@ -362,8 +343,7 @@
   position: sticky;
   top: 0;
   z-index: 2;
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(14px);
+  background: #fff;
 }
 
 .session-selector {
@@ -544,15 +524,15 @@
 .chat-item-card {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
-  padding: 0.55rem 0.65rem;
+  gap: 0.55rem;
+  padding: 0.42rem 0.55rem;
   border: 1px solid transparent;
   border-left: 3px solid transparent;
-  border-radius: 10px;
+  border-radius: 8px;
   cursor: pointer;
   transition: 0.15s ease;
   user-select: none;
-  margin-bottom: 0.1rem;
+  margin-bottom: 0.05rem;
   background: transparent;
 }
 
@@ -568,9 +548,9 @@
 }
 
 .chat-avatar {
-  width: 38px;
-  height: 38px;
-  border-radius: 11px;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
   background: linear-gradient(135deg, #eff6ff, #f0fdf4);
   border: 1px solid rgba(148, 163, 184, 0.18);
   display: flex;
@@ -697,7 +677,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, rgba(248, 250, 252, 0.9), rgba(241, 245, 249, 0.95));
+  background: #f5f7fa;
   min-height: 0;
   overflow: hidden;
   position: relative; /* positioning context for the Chat Info drawer */
@@ -789,9 +769,11 @@
 }
 
 .room-header {
-  background: rgba(255, 255, 255, 0.84);
+  background: #fff;
   border-bottom: 1px solid rgba(148, 163, 184, 0.16);
-  padding: 0.6rem 1.1rem;
+  padding: 0.4rem 0.85rem;
+  min-height: 48px;
+  max-height: 56px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -815,37 +797,17 @@
   flex-shrink: 0;
 }
 
-/* Secondary status pill — present but quiet. Only the dot carries the live/offline signal. */
-.room-header-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.26rem 0.55rem;
-  border-radius: 999px;
-  background: rgba(34, 197, 94, 0.1);
-  color: #166534;
-  font-size: 0.7rem;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.room-header-pill.subtle {
-  background: rgba(148, 163, 184, 0.14);
-  color: #475569;
-}
-
-/* Header info button — circular glass control, right-aligned, premium hover/focus. */
+/* Header info button — flat circular control, right-aligned. */
 .room-info-btn {
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
   border: 1px solid rgba(148, 163, 184, 0.28);
-  background: rgba(255, 255, 255, 0.55);
-  backdrop-filter: blur(8px);
+  background: #fff;
   color: #475569;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -894,9 +856,9 @@
 }
 
 .room-avatar {
-  width: 38px;
-  height: 38px;
-  border-radius: 11px;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
   background: var(--bg-light);
   border: 1px solid var(--border);
   display: flex;
@@ -945,10 +907,20 @@
   color: #cbd5e1;
 }
 
+.room-contact-meta .meta-ok {
+  color: #15803d;
+  font-weight: 600;
+}
+
+.room-contact-meta .meta-warn {
+  color: #c2410c;
+  font-weight: 600;
+}
+
 .room-messages {
   flex: 1;
   min-height: 0;
-  padding: 1.1rem 1.5rem;
+  padding: 0.9rem 1.25rem 1.5rem;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -957,7 +929,7 @@
   background-image: radial-gradient(rgba(148, 163, 184, 0.1) 1px, transparent 0);
   background-size: 26px 26px;
   overscroll-behavior: contain;
-  scroll-padding-bottom: 1rem;
+  scroll-padding-bottom: 1.25rem;
 }
 
 /* Add breathing room only when the sender flips, so a run from one side stays tight and
@@ -1125,12 +1097,9 @@
 .room-input-footer {
   background: var(--bg-white);
   border-top: 1px solid var(--border);
-  padding: 0.6rem 1rem;
+  padding: 0.45rem 0.85rem;
   box-sizing: border-box;
   flex-shrink: 0;
-  position: sticky;
-  bottom: 0;
-  z-index: 2;
 }
 
 .chats-page .input-form {
@@ -1142,10 +1111,10 @@
 .message-text-input {
   flex: 1;
   min-width: 0; /* dominant + never pushes the buttons into overflow */
-  padding: 0.6rem 0.95rem;
+  padding: 0.45rem 0.8rem;
   border: 1px solid var(--border);
-  border-radius: 10px;
-  font-size: 0.9rem;
+  border-radius: 9px;
+  font-size: 0.86rem;
   background: var(--bg-light);
   color: var(--text-primary);
   outline: none;
@@ -1167,16 +1136,15 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
+  width: 32px;
+  height: 32px;
   background: var(--primary);
   border: none;
-  border-radius: 9px;
+  border-radius: 8px;
   color: white;
   cursor: pointer;
   transition: background 0.2s, transform 0.1s;
   flex-shrink: 0;
-  box-shadow: 0 2px 6px rgba(34, 197, 94, 0.25);
 }
 
 .btn-send-message:hover:not(:disabled) {
@@ -1685,7 +1653,7 @@
   align-items: center;
   gap: 0.5rem;
   /* Roomy on narrow panes, but cap line length on wide screens for readability. */
-  max-width: min(76%, 620px);
+  max-width: min(62%, 560px);
   min-width: 0;
 }
 
@@ -1959,15 +1927,14 @@
   top: 0;
   right: 0;
   bottom: 0;
-  width: 312px;
+  width: 304px;
   max-width: 88%;
   z-index: 9;
   display: flex;
   flex-direction: column;
-  background: rgba(255, 255, 255, 0.78);
-  backdrop-filter: blur(18px);
+  background: #fff;
   border-left: 1px solid rgba(148, 163, 184, 0.24);
-  box-shadow: -18px 0 40px rgba(15, 23, 42, 0.12);
+  box-shadow: -4px 0 16px rgba(15, 23, 42, 0.08);
   animation: chat-info-slide 0.2s ease;
 }
 

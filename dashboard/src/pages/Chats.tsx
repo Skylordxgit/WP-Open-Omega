@@ -966,13 +966,8 @@ export function Chats() {
         <div className="chats-layout">
           <aside className="chats-rail">
             <div className="chats-rail-brand">
-              <div className="chats-rail-brand-icon">
-                <MessageSquare size={18} />
-              </div>
-              <div>
-                <div className="chats-rail-brand-title">Help Desk</div>
-                <div className="chats-rail-brand-subtitle">WhatsApp operator workspace</div>
-              </div>
+              <MessageSquare size={14} />
+              <span className="chats-rail-brand-title">Workspace</span>
             </div>
 
             <div className="chats-rail-group">
@@ -1234,22 +1229,15 @@ export function Chats() {
                       <h3>{activeChat.name || activeChat.id.split('@')[0]}</h3>
                       <span>{activeChat.id}</span>
                       <div className="room-contact-meta">
-                        <span>{activeChat.isGroup ? 'Shared workspace' : '1:1 conversation'}</span>
-                        <span>
-                          {messagesTotal > activeChatMessageCount
-                            ? `${activeChatMessageCount} / ${messagesTotal} loaded`
-                            : `${activeChatMessageCount} loaded`}
+                        <span className={isConnected ? 'meta-ok' : 'meta-warn'}>
+                          {isConnected ? 'Connected' : 'Waiting for sync'}
                         </span>
-                        <span>{activeChatUnread} unread</span>
+                        <span>{activeChat.isGroup ? 'Group' : 'Direct'}</span>
+                        <span>{selectedChannelName}</span>
                       </div>
                     </div>
                   </div>
                   <div className="room-header-actions">
-                    <div className="room-header-pill">
-                      <Wifi size={14} />
-                      {isConnected ? 'Connected' : 'Waiting for sync'}
-                    </div>
-                    <div className="room-header-pill subtle">{activeChat.isGroup ? 'Group' : 'Direct'}</div>
                     <button
                       type="button"
                       className={`room-info-btn ${showInfo ? 'active' : ''}`}
@@ -1413,16 +1401,32 @@ export function Chats() {
                                 </div>
                               )}
 
-                              {renderMedia()}
+                              {(() => {
+                                const renderedMedia = renderMedia();
+                                const hasTextBody =
+                                  !!msg.body && (!mediaInfo || msg.body !== mediaInfo.filename);
 
-                              {isRevoked ? (
-                                <div className="message-text">{t('chats.messageDeleted')}</div>
-                              ) : (
-                                msg.body &&
-                                (!mediaInfo || msg.body !== mediaInfo.filename) && (
-                                  <div className="message-text">{renderTextWithLinks(msg.body)}</div>
-                                )
-                              )}
+                                if (isRevoked) {
+                                  return <div className="message-text">{t('chats.messageDeleted')}</div>;
+                                }
+                                if (renderedMedia || hasTextBody) {
+                                  return (
+                                    <>
+                                      {renderedMedia}
+                                      {hasTextBody && (
+                                        <div className="message-text">{renderTextWithLinks(msg.body)}</div>
+                                      )}
+                                    </>
+                                  );
+                                }
+                                // Only reached when there's truly no media and no text to show
+                                // (e.g. media payload missing/unfetched for a non-text type).
+                                return (
+                                  <div className="message-text message-unsupported">
+                                    {t('chats.unsupportedMessage', { defaultValue: 'Unsupported message type' })}
+                                  </div>
+                                );
+                              })()}
 
                               <div className="message-meta">
                                 <span className="message-time">{formattedTime}</span>
