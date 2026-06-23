@@ -19,6 +19,7 @@ import {
   Phone,
   Clock3,
   Info,
+  MoreVertical,
   Mic,
   FileText,
   Film,
@@ -191,6 +192,7 @@ export function Chats() {
   const [selectedChannelIds, setSelectedChannelIds] = useState<string[]>([]);
   const [showChannelMenu, setShowChannelMenu] = useState<boolean>(false);
   const channelMenuRef = useRef<HTMLDivElement | null>(null);
+  const inboxSearchRef = useRef<HTMLInputElement | null>(null);
 
   // Selected chat & message history
   const [activeChat, setActiveChat] = useState<ChatWithSession | null>(null);
@@ -1059,6 +1061,7 @@ export function Chats() {
               <div className="chat-search-input">
                 <Search size={18} />
                 <input
+                  ref={inboxSearchRef}
                   type="text"
                   placeholder={t('chats.searchPlaceholder')}
                   value={searchQuery}
@@ -1185,13 +1188,31 @@ export function Chats() {
                   <div className="room-header-actions">
                     <button
                       type="button"
-                      className={`room-info-btn ${showInfo ? 'active' : ''}`}
+                      className="room-action-btn"
+                      title="Search conversations"
+                      aria-label="Search conversations"
+                      onClick={() => inboxSearchRef.current?.focus()}
+                    >
+                      <Search size={18} />
+                    </button>
+                    <button
+                      type="button"
+                      className={`room-action-btn ${showInfo ? 'active' : ''}`}
                       title="Chat info"
                       aria-label="Chat info"
                       aria-expanded={showInfo}
                       onClick={() => setShowInfo(v => !v)}
                     >
                       <Info size={18} />
+                    </button>
+                    <button
+                      type="button"
+                      className="room-action-btn"
+                      title="More options"
+                      aria-label="More options"
+                      onClick={() => setShowInfo(true)}
+                    >
+                      <MoreVertical size={18} />
                     </button>
                   </div>
                 </header>
