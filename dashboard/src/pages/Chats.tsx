@@ -926,7 +926,9 @@ export function Chats() {
                   return (
                     <div
                       key={chat.id}
-                      className={`chat-item-card ${isActive ? 'active' : ''}`}
+                      className={`chat-item-card ${isActive ? 'active' : ''} ${
+                        (chat.unreadCount || 0) > 0 ? 'has-unread' : ''
+                      }`}
                       onClick={() => setActiveChat(chat)}
                     >
                       <div className="chat-avatar">
