@@ -17,7 +17,6 @@ import {
   Funnel,
   ArrowUpDown,
   Phone,
-  Wifi,
   Clock3,
   Info,
   Mic,
@@ -858,7 +857,6 @@ export function Chats() {
   };
 
   const formatLastMessageSnippet = (chat: Chat) => chat.lastMessage || '';
-  const selectedSession = sessions.find(session => session.id === selectedSessionId) || null;
   const totalUnread = chats.reduce((sum, chat) => sum + (chat.unreadCount || 0), 0);
   const directChats = chats.filter(chat => !chat.isGroup).length;
   const groupChats = chats.filter(chat => chat.isGroup).length;
@@ -918,19 +916,6 @@ export function Chats() {
       return sortMode === 'recent' ? bTime - aTime : aTime - bTime;
     });
 
-  const inboxTitle =
-    inboxView === 'unread'
-      ? 'Unread queue'
-      : inboxView === 'direct'
-        ? 'Direct conversations'
-        : inboxView === 'groups'
-          ? 'Group conversations'
-          : selectedSession?.name || 'Inbox';
-
-  const inboxSubtitle =
-    inboxView === 'unread'
-      ? `${totalUnread} unread messages waiting for action`
-      : `${filteredChats.length} conversations available in this workspace`;
 
   return (
     <div className="chats-page">
@@ -964,114 +949,76 @@ export function Chats() {
         </div>
       ) : (
         <div className="chats-layout">
-          <aside className="chats-rail">
-            <div className="chats-rail-brand">
-              <MessageSquare size={14} />
-              <span className="chats-rail-brand-title">Workspace</span>
+          <aside className="chats-iconbar">
+            <div className="chats-iconbar-logo" title="Workspace">
+              <MessageSquare size={20} />
             </div>
-
-            <div className="chats-rail-group">
-              <div className="chats-rail-label">Active session</div>
-              <div className="chats-rail-card">
-                <div className="chats-rail-card-top">
-                  <div>
-                    <div className="chats-rail-card-title">{selectedSession?.name || 'Session'}</div>
-                    <div className="chats-rail-card-subtitle">{selectedSession?.phone || t('chats.noPhone')}</div>
-                  </div>
-                  <span className={`chats-session-badge ${isConnected ? 'online' : 'syncing'}`}>
-                    <Wifi size={12} />
-                    {isConnected ? 'Live' : 'Syncing'}
-                  </span>
-                </div>
-                <select
-                  value={selectedSessionId}
-                  onChange={e => setSelectedSessionId(e.target.value)}
-                  className="session-selector"
-                >
-                  {sessions.map(s => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({s.phone || t('chats.noPhone')})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="chats-rail-group">
-              <div className="chats-rail-label">Views</div>
-              <div className="chats-rail-nav">
-                <button
-                  type="button"
-                  className={`chats-rail-nav-item ${inboxView === 'all' ? 'active' : ''}`}
-                  onClick={() => setInboxView('all')}
-                >
-                  <span className="chats-rail-nav-main">
-                    <MessageSquare size={18} />
-                    All
-                  </span>
-                  <span>{filteredChats.length}</span>
-                </button>
-                <button
-                  type="button"
-                  className={`chats-rail-nav-item ${inboxView === 'unread' ? 'active' : ''}`}
-                  onClick={() => setInboxView('unread')}
-                >
-                  <span className="chats-rail-nav-main">
-                    <Clock3 size={18} />
-                    Unread
-                  </span>
-                  <span>{totalUnread}</span>
-                </button>
-                <button
-                  type="button"
-                  className={`chats-rail-nav-item ${inboxView === 'direct' ? 'active' : ''}`}
-                  onClick={() => setInboxView('direct')}
-                >
-                  <span className="chats-rail-nav-main">
-                    <Phone size={18} />
-                    Direct
-                  </span>
-                  <span>{directChats}</span>
-                </button>
-                <button
-                  type="button"
-                  className={`chats-rail-nav-item ${inboxView === 'groups' ? 'active' : ''}`}
-                  onClick={() => setInboxView('groups')}
-                >
-                  <span className="chats-rail-nav-main">
-                    <Users size={18} />
-                    Groups
-                  </span>
-                  <span>{groupChats}</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="chats-rail-group chats-rail-group--summary">
-              <div className="chats-rail-label">Workspace health</div>
-              <div className="chats-rail-stats">
-                <div className="chats-rail-stat">
-                  <span>Live</span>
-                  <strong>{isConnected ? 'Online' : 'Reconnecting'}</strong>
-                </div>
-                <div className="chats-rail-stat">
-                  <span>Unread</span>
-                  <strong>{totalUnread}</strong>
-                </div>
-                <div className="chats-rail-stat">
-                  <span>Mix</span>
-                  <strong>{directChats}/{groupChats}</strong>
-                </div>
-              </div>
+            <nav className="chats-iconbar-nav">
+              <button
+                type="button"
+                className={`chats-iconbar-btn ${inboxView === 'all' ? 'active' : ''}`}
+                onClick={() => setInboxView('all')}
+                title="All conversations"
+                aria-label="All conversations"
+              >
+                <MessageSquare size={20} />
+                {filteredChats.length > 0 && (
+                  <span className="chats-iconbar-count">{filteredChats.length}</span>
+                )}
+              </button>
+              <button
+                type="button"
+                className={`chats-iconbar-btn ${inboxView === 'unread' ? 'active' : ''}`}
+                onClick={() => setInboxView('unread')}
+                title="Unread"
+                aria-label="Unread"
+              >
+                <Clock3 size={20} />
+                {totalUnread > 0 && <span className="chats-iconbar-count alert">{totalUnread}</span>}
+              </button>
+              <button
+                type="button"
+                className={`chats-iconbar-btn ${inboxView === 'direct' ? 'active' : ''}`}
+                onClick={() => setInboxView('direct')}
+                title="Direct"
+                aria-label="Direct"
+              >
+                <Phone size={20} />
+                {directChats > 0 && <span className="chats-iconbar-count">{directChats}</span>}
+              </button>
+              <button
+                type="button"
+                className={`chats-iconbar-btn ${inboxView === 'groups' ? 'active' : ''}`}
+                onClick={() => setInboxView('groups')}
+                title="Groups"
+                aria-label="Groups"
+              >
+                <Users size={20} />
+                {groupChats > 0 && <span className="chats-iconbar-count">{groupChats}</span>}
+              </button>
+            </nav>
+            <div className="chats-iconbar-foot">
+              <span
+                className={`chats-iconbar-dot ${isConnected ? 'online' : 'syncing'}`}
+                title={isConnected ? 'Connected' : 'Reconnecting'}
+              />
             </div>
           </aside>
 
           <section className="chats-inbox">
             <div className="chats-inbox-header">
-              <div>
-                <div className="chats-inbox-title">{inboxTitle}</div>
-                <div className="chats-inbox-subtitle">{inboxSubtitle}</div>
-              </div>
+              <select
+                value={selectedSessionId}
+                onChange={e => setSelectedSessionId(e.target.value)}
+                className="chats-workspace-select"
+                title="Active workspace"
+              >
+                {sessions.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.phone || t('chats.noPhone')})
+                  </option>
+                ))}
+              </select>
               <div className="chats-channel-filter" ref={channelMenuRef}>
                 <button
                   type="button"
