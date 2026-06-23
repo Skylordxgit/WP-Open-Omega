@@ -18,7 +18,6 @@ import {
   ArrowUpDown,
   Phone,
   Clock3,
-  Info,
   Mic,
   FileText,
   Film,
@@ -1183,18 +1182,6 @@ export function Chats() {
                         <span>{selectedChannelName}</span>
                       </div>
                     </div>
-                  </div>
-                  <div className="room-header-actions">
-                    <button
-                      type="button"
-                      className={`room-info-btn ${showInfo ? 'active' : ''}`}
-                      title="Chat info"
-                      aria-label="Chat info"
-                      aria-expanded={showInfo}
-                      onClick={() => setShowInfo(v => !v)}
-                    >
-                      <Info size={18} />
-                    </button>
                   </div>
                 </header>
 

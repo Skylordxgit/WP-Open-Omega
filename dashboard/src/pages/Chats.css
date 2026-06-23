@@ -10,48 +10,46 @@
   overflow: hidden;
 }
 
-/* Full-bleed WhatsApp/Intercom split: 72px icon rail, 320px chat list, conversation gets the rest.
-   `zoom: 0.85` scales the whole workspace down ~15%; width/height are divided by the same factor so
-   the scaled box still fills the viewport edge-to-edge (no right/bottom gap). */
+/* Full-bleed WhatsApp/Intercom split: 64px icon rail, 304px chat list, conversation gets the rest.
+   Density is achieved with real, smaller dimensions/fonts (no CSS zoom). */
 .chats-layout {
   display: grid;
-  grid-template-columns: 72px 320px minmax(0, 1fr);
+  grid-template-columns: 64px 304px minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
   min-height: 0;
   background: #fff;
   border: none;
   border-radius: 0;
   overflow: hidden;
-  zoom: 0.85;
-  width: calc(100% / 0.85);
-  height: calc(100dvh / 0.85);
 }
 
 /* =============================================================================
    ICON RAIL — slim 72px Intercom-style nav (logo, view switches, live dot)
    ============================================================================= */
 .chats-iconbar {
-  width: 72px;
+  width: 64px;
   border-right: 1px solid rgba(148, 163, 184, 0.18);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.6rem 0;
+  gap: 0.3rem;
+  padding: 0.45rem 0;
   background: #f8fafc;
   min-height: 0;
 }
 
 .chats-iconbar-logo {
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 11px;
+  border-radius: 9px;
   background: linear-gradient(135deg, #2563eb, #22c55e);
   color: #fff;
   flex-shrink: 0;
-  margin-bottom: 0.35rem;
+  margin-bottom: 0.25rem;
 }
 
 .chats-iconbar-nav {
@@ -64,8 +62,8 @@
 
 .chats-iconbar-btn {
   position: relative;
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -120,8 +118,8 @@
 }
 
 .chats-iconbar-dot {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: #cbd5e1;
 }
@@ -146,9 +144,9 @@
 }
 
 .chats-inbox-header {
-  height: 50px;
-  min-height: 50px;
-  padding: 0 0.7rem;
+  height: 40px;
+  min-height: 40px;
+  padding: 0 0.55rem;
   border-bottom: 1px solid rgba(148, 163, 184, 0.16);
   display: flex;
   align-items: center;
@@ -161,12 +159,12 @@
 .chats-workspace-select {
   flex: 1;
   min-width: 0;
-  padding: 0.35rem 0.5rem;
+  padding: 0.28rem 0.4rem;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: 7px;
   background: transparent;
   color: #0f172a;
-  font-size: 0.85rem;
+  font-size: 0.76rem;
   font-weight: 600;
   cursor: pointer;
   outline: none;
@@ -192,12 +190,12 @@
   border: 1px solid rgba(148, 163, 184, 0.24);
   background: rgba(255, 255, 255, 0.92);
   color: #0f172a;
-  border-radius: 8px;
-  padding: 0.4rem 0.6rem;
+  border-radius: 7px;
+  padding: 0.3rem 0.5rem;
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  font-size: 0.8rem;
+  gap: 0.3rem;
+  font-size: 0.72rem;
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
@@ -272,7 +270,7 @@
 }
 
 .chats-inbox-toolbar {
-  padding: 0.6rem 0.75rem;
+  padding: 0.45rem 0.55rem;
   border-bottom: 1px solid rgba(148, 163, 184, 0.16);
   display: flex;
   align-items: center;
@@ -414,9 +412,10 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
-  padding: 0.35rem;
+  padding: 0.3rem;
   overscroll-behavior: contain;
 }
 
@@ -463,11 +462,11 @@
 .chat-item-card {
   display: flex;
   align-items: center;
-  gap: 0.55rem;
-  padding: 0.42rem 0.55rem;
+  gap: 0.45rem;
+  padding: 0.32rem 0.4rem;
   border: 1px solid transparent;
   border-left: 3px solid transparent;
-  border-radius: 8px;
+  border-radius: 7px;
   cursor: pointer;
   transition: 0.15s ease;
   user-select: none;
@@ -487,9 +486,9 @@
 }
 
 .chat-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
   background: linear-gradient(135deg, #eff6ff, #f0fdf4);
   border: 1px solid rgba(148, 163, 184, 0.18);
   display: flex;
@@ -521,7 +520,7 @@
 }
 
 .chat-item-name {
-  font-size: 0.875rem;
+  font-size: 0.78rem;
   font-weight: 600;
   color: var(--text-primary);
   white-space: nowrap;
@@ -530,7 +529,7 @@
 }
 
 .chat-item-time {
-  font-size: 0.7rem;
+  font-size: 0.62rem;
   color: var(--text-muted);
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
@@ -555,7 +554,7 @@
 }
 
 .chat-item-snippet {
-  font-size: 0.78rem;
+  font-size: 0.7rem;
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -572,12 +571,12 @@
 .chat-unread-badge {
   background: var(--primary);
   color: white;
-  font-size: 0.68rem;
+  font-size: 0.6rem;
   font-weight: 700;
   line-height: 1;
-  padding: 0.18rem 0.34rem;
+  padding: 0.14rem 0.28rem;
   border-radius: 999px;
-  min-width: 18px;
+  min-width: 15px;
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
@@ -620,12 +619,6 @@
   min-height: 0;
   overflow: hidden;
   position: relative; /* positioning context for the Chat Info drawer */
-}
-
-.room-info-btn.active {
-  background: rgba(37, 99, 235, 0.14);
-  border-color: rgba(37, 99, 235, 0.4);
-  color: #1d4ed8;
 }
 
 .chats-room-placeholder {
@@ -710,9 +703,9 @@
 .room-header {
   background: #fff;
   border-bottom: 1px solid rgba(148, 163, 184, 0.16);
-  padding: 0.4rem 0.85rem;
-  min-height: 48px;
-  max-height: 56px;
+  padding: 0.32rem 0.65rem;
+  min-height: 40px;
+  max-height: 46px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -736,44 +729,6 @@
   flex-shrink: 0;
 }
 
-/* Header info button — flat circular control, right-aligned. */
-.room-info-btn {
-  width: 30px;
-  height: 30px;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  background: #fff;
-  color: #475569;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.room-info-btn:hover {
-  background: rgba(37, 99, 235, 0.1);
-  border-color: rgba(37, 99, 235, 0.35);
-  color: #1d4ed8;
-}
-
-.room-info-btn:focus-visible {
-  outline: 2px solid #2563eb;
-  outline-offset: 2px;
-}
-
-[data-theme='dark'] .room-info-btn {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.12);
-  color: #cbd5e1;
-}
-
-[data-theme='dark'] .room-info-btn:hover {
-  background: rgba(37, 99, 235, 0.22);
-  color: #bfdbfe;
-}
-
 .room-contact-info {
   min-width: 0;
 }
@@ -795,9 +750,9 @@
 }
 
 .room-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
   background: var(--bg-light);
   border: 1px solid var(--border);
   display: flex;
@@ -809,7 +764,7 @@
 
 /* Primary: the chat name dominates the header. */
 .room-contact-info h3 {
-  font-size: 1rem;
+  font-size: 0.86rem;
   font-weight: 700;
   color: var(--text-primary);
   margin: 0;
@@ -817,7 +772,7 @@
 }
 
 .room-contact-info > span {
-  font-size: 0.72rem;
+  font-size: 0.64rem;
   color: var(--text-muted);
   font-family: monospace;
 }
@@ -833,7 +788,7 @@
 
 .room-contact-meta span {
   font-family: inherit;
-  font-size: 0.7rem;
+  font-size: 0.62rem;
   color: #64748b;
   background: transparent;
   border-radius: 0;
@@ -859,11 +814,12 @@
 .room-messages {
   flex: 1;
   min-height: 0;
-  padding: 0.9rem 1.25rem 1.5rem;
+  padding: 0.7rem 1rem 1.2rem;
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.25rem;
   /* Very subtle texture — barely-there dots, not a visible grid. */
   background-image: radial-gradient(rgba(148, 163, 184, 0.1) 1px, transparent 0);
   background-size: 26px 26px;
@@ -956,10 +912,10 @@
 
 .message-bubble {
   max-width: 100%;
-  padding: 0.5rem 0.7rem 0.3rem;
-  border-radius: 10px;
-  font-size: 0.875rem;
-  line-height: 1.45;
+  padding: 0.4rem 0.55rem 0.25rem;
+  border-radius: 9px;
+  font-size: 0.8rem;
+  line-height: 1.4;
   position: relative;
   box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
 }
@@ -1036,7 +992,7 @@
 .room-input-footer {
   background: var(--bg-white);
   border-top: 1px solid var(--border);
-  padding: 0.45rem 0.85rem;
+  padding: 0.35rem 0.65rem;
   box-sizing: border-box;
   flex-shrink: 0;
 }
@@ -1050,10 +1006,10 @@
 .message-text-input {
   flex: 1;
   min-width: 0; /* dominant + never pushes the buttons into overflow */
-  padding: 0.45rem 0.8rem;
+  padding: 0.35rem 0.65rem;
   border: 1px solid var(--border);
-  border-radius: 9px;
-  font-size: 0.86rem;
+  border-radius: 8px;
+  font-size: 0.78rem;
   background: var(--bg-light);
   color: var(--text-primary);
   outline: none;
@@ -1075,11 +1031,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   background: var(--primary);
   border: none;
-  border-radius: 8px;
+  border-radius: 7px;
   color: white;
   cursor: pointer;
   transition: background 0.2s, transform 0.1s;
@@ -1308,6 +1264,13 @@
 /* =============================================================================
    RESPONSIVENESS
    ============================================================================= */
+/* Tablet/laptop: keep the compact 3-column layout but shrink the chat list a touch. */
+@media (max-width: 1100px) {
+  .chats-layout {
+    grid-template-columns: 64px 260px minmax(0, 1fr);
+  }
+}
+
 @media (max-width: 768px) {
   .chats-page {
     padding: 0;
@@ -1315,10 +1278,9 @@
     min-height: 100dvh;
   }
 
-  /* Drop the 15% zoom on mobile and stack the three regions vertically. */
+  /* Stack the three regions vertically on small screens. */
   .chats-layout {
     grid-template-columns: 1fr;
-    zoom: 1;
     width: 100%;
     height: auto;
     min-height: 100dvh;
@@ -1616,7 +1578,7 @@
   align-items: center;
   gap: 0.5rem;
   /* Roomy on narrow panes, but cap line length on wide screens for readability. */
-  max-width: min(62%, 560px);
+  max-width: min(58%, 500px);
   min-width: 0;
 }
 
