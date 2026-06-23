@@ -2181,8 +2181,19 @@
 }
 
 @media (max-width: 768px) {
+  /* On mobile the room is only ~half-height; promote the drawer + scrim to a true full-screen
+     overlay so it isn't trapped inside the chat area. */
+  .chat-info-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+  }
+
   .chat-info-drawer {
+    position: fixed;
+    inset: 0;
     width: 100%;
     max-width: 100%;
+    z-index: 1001;
   }
 }

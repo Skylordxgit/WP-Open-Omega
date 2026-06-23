@@ -199,6 +199,10 @@ export function Chats() {
   const [loadingMessages, setLoadingMessages] = useState<boolean>(false);
   const [messagesTotal, setMessagesTotal] = useState<number>(0); // real DB count for this chat
   const [loadingOlder, setLoadingOlder] = useState<boolean>(false); // "load older" in flight
+  // Whether the oldest stored message has been loaded. Gates the "Load older" control independently
+  // of message counts, so live/sent appends can't make the control disappear while older history
+  // remains unloaded.
+  const [reachedOldest, setReachedOldest] = useState<boolean>(false);
   const [messageInput, setMessageInput] = useState<string>('');
   const [sending, setSending] = useState<boolean>(false);
 
@@ -211,6 +215,13 @@ export function Chats() {
   const loadMessagesReqRef = useRef(0);
   // Set before prepending older history so the bottom-auto-scroll effect skips that one update.
   const skipNextAutoScrollRef = useRef(false);
+  // Auto-scroll control: only jump to bottom on chat-open / send, or when the user is already there.
+  const isNearBottomRef = useRef(true);
+  const forceScrollRef = useRef(false);
+  // Mirror of `chats` + a debounce timer so an unknown-chat refresh can be triggered WITHOUT calling
+  // setState inside a state updater (keeps the reducer pure).
+  const chatsRef = useRef<ChatWithSession[]>([]);
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // File attachments
   const [attachment, setAttachment] = useState<{
@@ -293,6 +304,32 @@ export function Chats() {
     setPreviewUrl(null);
   }, [selectedChannelIds, loadChats]);
 
+  // Keep a non-reactive mirror of the chat list so realtime handlers can detect an unknown chat
+  // without depending on `chats` (and without reading state inside a reducer).
+  useEffect(() => {
+    chatsRef.current = chats;
+  }, [chats]);
+
+  // Debounced refresh used when a message arrives for a chat not yet in the list. Coalesces bursts
+  // into a single reload instead of fetching per message, and never runs inside a state updater.
+  const scheduleChatsRefresh = useCallback(
+    (sessionIds: string[]) => {
+      if (refreshTimerRef.current != null) return;
+      refreshTimerRef.current = setTimeout(() => {
+        refreshTimerRef.current = null;
+        void loadChats(sessionIds);
+      }, 1200);
+    },
+    [loadChats],
+  );
+
+  // Clear any pending refresh timer on unmount.
+  useEffect(() => {
+    return () => {
+      if (refreshTimerRef.current != null) clearTimeout(refreshTimerRef.current);
+    };
+  }, []);
+
   const markChatRead = useCallback(
     (sessionId: string, chatId: string) => {
       void sessionApi.markChatRead(sessionId, chatId).catch(err => {
@@ -339,14 +376,21 @@ export function Chats() {
         });
       }
 
-      // Update sidebar chat list
+      // An unknown chat (not yet in the list) is refreshed via a debounced reload — decided here,
+      // OUTSIDE the setChats updater, so the reducer stays pure.
+      const isKnownChat =
+        chatsRef.current.findIndex(c => c.id === newMsg.chatId && c.sessionId === event.sessionId) !== -1;
+      if (!isKnownChat) {
+        scheduleChatsRefresh(selectedChannelIds);
+      }
+
+      // Update sidebar chat list (pure updater).
       setChats(prevChats => {
         const chatIndex = prevChats.findIndex(
           c => c.id === newMsg.chatId && c.sessionId === event.sessionId,
         );
         if (chatIndex === -1) {
-          void loadChats(selectedChannelIds);
-          return prevChats;
+          return prevChats; // not loaded yet — the scheduled refresh above will bring it in
         }
 
         const updatedChats = [...prevChats];
@@ -363,7 +407,7 @@ export function Chats() {
         return updatedChats;
       });
     },
-    [selectedChannelIds, activeChat, loadChats, markChatRead],
+    [selectedChannelIds, activeChat, scheduleChatsRefresh, markChatRead],
   );
 
   const handleIncomingMessageAck = useCallback(
@@ -442,6 +486,13 @@ export function Chats() {
     }
   }, [selectedChannelIds, isConnected, subscribe, unsubscribe]);
 
+  // Count of DB-backed messages currently shown (optimistic temp rows are not yet persisted, so
+  // they must not count toward the pagination offset).
+  const loadedPersistedCount = messages.reduce(
+    (n, m) => (String(m.id).startsWith('temp_') ? n : n + 1),
+    0,
+  );
+
   // 4. Fetch message history for the selected chat
   const loadMessages = useCallback(
     async (sessionId: string, chatId: string) => {
@@ -452,13 +503,18 @@ export function Chats() {
       try {
         const data = await sessionApi.getChatMessages(sessionId, chatId, 100);
         if (reqId !== loadMessagesReqRef.current) return; // chat switched mid-flight — discard
+        const total = typeof data.total === 'number' ? data.total : data.messages.length;
+        forceScrollRef.current = true; // opening a chat always lands at the latest message
         setMessages([...data.messages].reverse());
-        setMessagesTotal(typeof data.total === 'number' ? data.total : data.messages.length);
+        setMessagesTotal(total);
+        // We've loaded the newest page; older history remains only if the DB holds more than we got.
+        setReachedOldest(data.messages.length >= total);
       } catch (err) {
         if (reqId !== loadMessagesReqRef.current) return;
         showErrorToast(t('chats.errors.loadMessages'), err instanceof Error ? err.message : undefined);
         setMessages([]);
         setMessagesTotal(0);
+        setReachedOldest(true);
       } finally {
         if (reqId === loadMessagesReqRef.current) setLoadingMessages(false);
       }
@@ -466,21 +522,20 @@ export function Chats() {
     [markChatRead, t, showErrorToast],
   );
 
-  // Append the next older page of history (uses the backend's existing offset paging). Older
-  // messages are prepended and de-duplicated, preserving chronological order.
+  // Append the next older page of history (uses the backend's existing offset paging). The offset is
+  // the count of PERSISTED messages loaded (excludes optimistic temp rows), so live/sent appends
+  // don't skew it. Older messages are prepended and de-duplicated, preserving chronological order.
   const loadOlderMessages = useCallback(async () => {
-    if (!activeChat || loadingOlder || loadingMessages) return;
-    if (messages.length >= messagesTotal) return;
+    if (!activeChat || loadingOlder || loadingMessages || reachedOldest) return;
     const reqId = loadMessagesReqRef.current; // tie this page to the current chat's load generation
     const { sessionId, id: chatId } = activeChat;
-    const currentCount = messages.length;
+    const offset = loadedPersistedCount; // count of non-temp (DB-backed) messages currently shown
     setLoadingOlder(true);
     try {
-      const data = await sessionApi.getChatMessages(sessionId, chatId, 100, currentCount);
+      const data = await sessionApi.getChatMessages(sessionId, chatId, 100, offset);
       if (reqId !== loadMessagesReqRef.current) return; // chat switched — discard
       if (data.messages.length === 0) {
-        // Reached the end of stored history — stop offering "load older".
-        setMessagesTotal(currentCount);
+        setReachedOldest(true); // no more stored history
         return;
       }
       const older = [...data.messages].reverse(); // oldest-first
@@ -488,16 +543,21 @@ export function Chats() {
       setMessages(prev => {
         const seen = new Set(prev.map(m => m.waMessageId || m.id));
         const deduped = older.filter(m => !seen.has(m.waMessageId || m.id));
-        if (deduped.length === 0) return prev;
+        if (deduped.length === 0) {
+          skipNextAutoScrollRef.current = false; // nothing prepended — don't swallow a later scroll
+          return prev;
+        }
         return [...deduped, ...prev];
       });
-      setMessagesTotal(typeof data.total === 'number' ? data.total : messagesTotal);
+      if (typeof data.total === 'number') setMessagesTotal(prev => Math.max(prev, data.total));
+      // A short page means we've reached the start of stored history.
+      if (data.messages.length < 100) setReachedOldest(true);
     } catch (err) {
       showErrorToast(t('chats.errors.loadMessages'), err instanceof Error ? err.message : undefined);
     } finally {
       setLoadingOlder(false);
     }
-  }, [activeChat, messages.length, messagesTotal, loadingOlder, loadingMessages, t, showErrorToast]);
+  }, [activeChat, loadedPersistedCount, loadingOlder, loadingMessages, reachedOldest, t, showErrorToast]);
 
   const handleReactMessage = async (msg: ChatMessageView, emoji: string) => {
     if (!activeChat) return;
@@ -620,15 +680,25 @@ export function Chats() {
     });
   };
 
-  // 5. Scroll chat to bottom — skipped once right after prepending older history, so loading
-  // older messages doesn't jump the user back down to the latest message.
+  // 5. Auto-scroll to bottom only when appropriate: on chat-open / send (forceScrollRef), or when
+  // the user is already near the bottom. If they've scrolled up to read history, don't yank them
+  // down on acks/reactions/incoming. Prepending older history is skipped entirely.
   useEffect(() => {
     if (skipNextAutoScrollRef.current) {
       skipNextAutoScrollRef.current = false;
       return;
     }
-    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (forceScrollRef.current || isNearBottomRef.current) {
+      forceScrollRef.current = false;
+      chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
+
+  // Track whether the message view is scrolled near the bottom (drives the auto-scroll decision).
+  const handleMessagesScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+  };
 
   // 6. Handle file selection & base64 conversion
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -711,6 +781,7 @@ export function Chats() {
           : undefined,
     };
 
+    forceScrollRef.current = true; // sending always scrolls the composer's message into view
     setMessages(prev => [...prev, tempMessage]);
 
     const currentAttachment = attachment;
@@ -1192,8 +1263,8 @@ export function Chats() {
                   </div>
                 </header>
 
-                <div className="room-messages">
-                  {!loadingMessages && messages.length > 0 && messages.length < messagesTotal && (
+                <div className="room-messages" onScroll={handleMessagesScroll}>
+                  {!loadingMessages && messages.length > 0 && !reachedOldest && (
                     <div className="load-older-row">
                       <button
                         type="button"
