@@ -754,29 +754,58 @@
   flex-shrink: 0;
 }
 
-.room-header-main,
-.room-header-actions {
+.room-header-main {
   display: flex;
   align-items: center;
   gap: 0.65rem;
+  min-width: 0; /* let the name truncate instead of pushing actions off-screen */
+  flex: 1;
+}
+
+.room-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
 }
 
 /* Secondary status pill — present but quiet. Only the dot carries the live/offline signal. */
 .room-header-pill {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.3rem 0.6rem;
-  border-radius: 7px;
+  gap: 0.3rem;
+  padding: 0.26rem 0.55rem;
+  border-radius: 999px;
   background: rgba(34, 197, 94, 0.1);
   color: #166534;
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .room-header-pill.subtle {
   background: rgba(148, 163, 184, 0.14);
   color: #475569;
+}
+
+.room-contact-info {
+  min-width: 0;
+}
+
+/* JID under the name: clutter-reducing — truncate to one tidy line. */
+.room-contact-info > span {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.room-contact-info h3 {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .room-avatar {
@@ -834,13 +863,14 @@
 .room-messages {
   flex: 1;
   min-height: 0;
-  padding: 1rem 1.25rem;
+  padding: 1.1rem 1.5rem;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-  background-image: radial-gradient(rgba(148, 163, 184, 0.18) 1px, transparent 0);
-  background-size: 22px 22px;
+  /* Very subtle texture — barely-there dots, not a visible grid. */
+  background-image: radial-gradient(rgba(148, 163, 184, 0.1) 1px, transparent 0);
+  background-size: 26px 26px;
   overscroll-behavior: contain;
   scroll-padding-bottom: 1rem;
 }
@@ -925,7 +955,28 @@
 
 .chats-page .message-text {
   word-break: break-word;
+  overflow-wrap: anywhere;
   white-space: pre-wrap;
+}
+
+/* Links inside a message stay readable + clearly clickable in both bubble colors. */
+.chats-page .message-text a {
+  color: #1d4ed8;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  word-break: break-all;
+}
+
+.message-bubble.outgoing .message-text a {
+  color: #0a6e57;
+}
+
+[data-theme='dark'] .chats-page .message-text a {
+  color: #53bdeb;
+}
+
+[data-theme='dark'] .message-bubble.outgoing .message-text a {
+  color: #aef2dd;
 }
 
 .chats-page .message-meta {
@@ -971,7 +1022,8 @@
 
 .message-text-input {
   flex: 1;
-  padding: 0.6rem 0.9rem;
+  min-width: 0; /* dominant + never pushes the buttons into overflow */
+  padding: 0.6rem 0.95rem;
   border: 1px solid var(--border);
   border-radius: 10px;
   font-size: 0.9rem;
@@ -985,7 +1037,11 @@
 .message-text-input:focus {
   border-color: var(--primary);
   background: var(--bg-white);
-  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1);
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.14);
+}
+
+.message-text-input::placeholder {
+  color: var(--text-muted);
 }
 
 .btn-send-message {
@@ -1276,49 +1332,68 @@
 /* =============================================================================
    MEDIA RENDERING STYLES
    ============================================================================= */
+/* Media wrappers: clip everything to the bubble's rounded frame so images/video sit flush. */
+.message-media-image,
+.message-media-video {
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 0.35rem;
+  max-width: 100%;
+}
+
+.message-media-audio {
+  margin-bottom: 0.35rem;
+}
+
 .chat-image-media {
   max-width: 100%;
-  max-height: 250px;
-  border-radius: 8px;
+  max-height: 280px;
+  width: auto;
+  border-radius: 10px;
   display: block;
-  margin-bottom: 0.5rem;
   cursor: pointer;
   object-fit: cover;
 }
 
 .chat-video-media {
   max-width: 100%;
-  max-height: 250px;
-  border-radius: 8px;
+  max-height: 280px;
+  border-radius: 10px;
   display: block;
-  margin-bottom: 0.5rem;
+  background: #000;
 }
 
 .chat-audio-media {
+  width: 260px;
   max-width: 100%;
   display: block;
-  margin-bottom: 0.5rem;
+  height: 40px;
 }
 
+/* Document: premium file chip with a colored icon tile, name, and a hover lift. */
 .chat-document-media {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
+  gap: 0.6rem;
+  padding: 0.55rem 0.7rem;
   background: var(--bg-light);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 10px;
   color: var(--text-primary);
   text-decoration: none;
-  font-size: 0.875rem;
-  font-weight: 500;
-  margin-bottom: 0.5rem;
-  transition: all 0.2s;
+  font-size: 0.84rem;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+  min-width: 180px;
+  max-width: 100%;
+  transition: all 0.15s;
   word-break: break-all;
 }
 
 .chat-document-media:hover {
-  background: var(--border);
+  background: var(--bg-white);
+  border-color: var(--primary);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
 }
 
 [data-theme='dark'] .chat-document-media {
@@ -1326,8 +1401,13 @@
   border-color: #2f3b43;
 }
 
+/* Slightly tighter frame around media so the caption/time sit close to the asset. */
 .message-bubble.media-type {
-  padding: 0.5rem;
+  padding: 0.4rem;
+}
+
+.message-bubble.media-type .message-text {
+  padding: 0.1rem 0.35rem 0;
 }
 
 /* =============================================================================
@@ -1338,7 +1418,9 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  max-width: 76%;
+  /* Roomy on narrow panes, but cap line length on wide screens for readability. */
+  max-width: min(76%, 620px);
+  min-width: 0;
 }
 
 .message-bubble-wrapper.outgoing .message-bubble-container {
