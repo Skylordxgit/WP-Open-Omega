@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, type CSSProperties } from 'react';
+import { useState, useEffect, useCallback, useRef, type CSSProperties, type ReactNode } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import {
   Search,
@@ -12,6 +12,7 @@ import {
   Image as ImageIcon,
   Music4,
   Play,
+  Mic,
   User,
   Users,
   AlertCircle,
@@ -246,6 +247,49 @@ const formatFileSize = (size?: number) => {
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const URL_PATTERN = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+
+const getMessageText = (message: ChatMessageView): string => {
+  const anyMessage = message as ChatMessageView & Record<string, unknown>;
+  return (
+    (typeof anyMessage.caption === 'string' && anyMessage.caption) ||
+    (typeof anyMessage.text === 'string' && anyMessage.text) ||
+    message.body ||
+    ''
+  );
+};
+
+const getQuotedMessageBody = (message: ChatMessageView): string | null => {
+  const anyMessage = message as ChatMessageView & Record<string, unknown>;
+  const quoted =
+    message.metadata?.quotedMessage ||
+    (typeof anyMessage.quotedMessage === 'object' && anyMessage.quotedMessage
+      ? (anyMessage.quotedMessage as { id?: string; body?: string })
+      : null) ||
+    (typeof anyMessage.quotedMsg === 'object' && anyMessage.quotedMsg
+      ? (anyMessage.quotedMsg as { id?: string; body?: string; text?: string })
+      : null);
+
+  if (!quoted) return null;
+  return quoted.body || ('text' in quoted && typeof quoted.text === 'string' ? quoted.text : '') || null;
+};
+
+const renderLinkedText = (text: string): ReactNode => {
+  const parts = text.split(URL_PATTERN);
+  return parts.map((part, index) => {
+    if (!part) return null;
+    const isUrl = URL_PATTERN.test(part);
+    URL_PATTERN.lastIndex = 0;
+    if (!isUrl) return <span key={`${part}-${index}`}>{part}</span>;
+    const href = part.startsWith('http') ? part : `https://${part}`;
+    return (
+      <a key={`${href}-${index}`} href={href} target="_blank" rel="noreferrer" className="message-link">
+        {part}
+      </a>
+    );
+  });
 };
 
 const resolveAttachment = (message: ChatMessageView): ResolvedMediaAttachment | null => {
@@ -883,6 +927,13 @@ export function Chats() {
   };
 
   const closeMediaPreview = () => setActiveMediaPreview(null);
+
+  const handleComposerKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      void handleSend();
+    }
+  };
 
   const handleSaveChatInfo = async () => {
     if (!activeSessionId || !activeChat || activeChat.isGroup) return;
@@ -1585,10 +1636,13 @@ export function Chats() {
                     </div>
                   ) : (
                     messages.map(msg => {
-                      const isMe = msg.direction === 'outgoing';
+                      const anyMessage = msg as ChatMessageView & Record<string, unknown>;
+                      const isMe = msg.direction === 'outgoing' || anyMessage.fromMe === true || anyMessage.isMe === true;
                       const formattedTime = formatTime(
                         msg.timestamp || Math.floor(new Date(msg.createdAt).getTime() / 1000),
                       );
+                      const messageText = getMessageText(msg);
+                      const quotedMessageBody = getQuotedMessageBody(msg);
 
                       const attachmentInfo = resolveAttachment(msg);
                       const isMediaMessage = msg.type !== 'text' || !!attachmentInfo;
@@ -1714,9 +1768,9 @@ export function Chats() {
                               } ${isRevoked ? 'revoked-type' : ''}`}
                             >
                               {/* Quoted message display */}
-                              {msg.metadata?.quotedMessage && (
+                              {quotedMessageBody && (
                                 <div className="message-quote-box">
-                                  <div className="quote-body">{msg.metadata.quotedMessage.body}</div>
+                                  <div className="quote-body">{quotedMessageBody}</div>
                                 </div>
                               )}
 
@@ -1725,9 +1779,9 @@ export function Chats() {
                               {isRevoked ? (
                                 <div className="message-text">{t('chats.messageDeleted')}</div>
                               ) : (
-                                (attachmentInfo?.caption || msg.body) &&
-                                (!attachmentInfo || (msg.body !== attachmentInfo.filename && msg.body !== attachmentInfo.src)) && (
-                                  <div className="message-text">{attachmentInfo?.caption || msg.body}</div>
+                                (attachmentInfo?.caption || messageText) &&
+                                (!attachmentInfo || (messageText !== attachmentInfo.filename && messageText !== attachmentInfo.src)) && (
+                                  <div className="message-text">{renderLinkedText(attachmentInfo?.caption || messageText)}</div>
                                 )
                               )}
 
@@ -1877,7 +1931,13 @@ export function Chats() {
                 {/* Message input bar */}
                 <footer className="room-input-footer">
                   <form onSubmit={handleSend} className="input-form">
-                    <input type="file" ref={fileInputRef} onChange={handleFileChange} style={{ display: 'none' }} />
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileChange}
+                      accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,audio/mpeg,audio/mp3,audio/ogg,audio/wav"
+                      style={{ display: 'none' }}
+                    />
 
                     <button
                       type="button"
@@ -1899,8 +1959,7 @@ export function Chats() {
                       <Smile size={20} />
                     </button>
 
-                    <input
-                      type="text"
+                    <textarea
                       placeholder={
                         canWrite
                           ? attachment
@@ -1910,17 +1969,31 @@ export function Chats() {
                       }
                       value={messageInput}
                       onChange={e => setMessageInput(e.target.value)}
+                      onKeyDown={handleComposerKeyDown}
+                      rows={1}
                       disabled={!canWrite || sending}
                       className="message-text-input"
                     />
-                    <button
-                      type="submit"
-                      disabled={!canWrite || (!messageInput.trim() && !attachment) || sending}
-                      className="btn-send-message"
-                      aria-label={t('chats.send')}
-                    >
-                      {sending ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />}
-                    </button>
+                    {messageInput.trim() || attachment ? (
+                      <button
+                        type="submit"
+                        disabled={!canWrite || (!messageInput.trim() && !attachment) || sending}
+                        className="btn-send-message"
+                        aria-label={t('chats.send')}
+                      >
+                        {sending ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled
+                        className="btn-send-message btn-mic-message"
+                        aria-label="Voice note"
+                        title="Voice note"
+                      >
+                        <Mic size={18} />
+                      </button>
+                    )}
                   </form>
                 </footer>
                   </div>
