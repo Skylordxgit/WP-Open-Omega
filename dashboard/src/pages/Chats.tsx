@@ -18,6 +18,7 @@ import {
   ArrowUpDown,
   Phone,
   Clock3,
+  Info,
   Mic,
   FileText,
   Film,
@@ -947,7 +948,7 @@ export function Chats() {
           </p>
         </div>
       ) : (
-        <div className="chats-layout">
+        <div className={`chats-layout ${showInfo && activeChat ? 'info-open' : ''}`}>
           <aside className="chats-iconbar">
             <div className="chats-iconbar-logo" title="Workspace">
               <MessageSquare size={20} />
@@ -1164,7 +1165,6 @@ export function Chats() {
 
           <main className="chats-room">
             {activeChat ? (
-              <>
               <div className="room-container">
                 <header className="room-header">
                   <div className="room-header-main">
@@ -1173,7 +1173,6 @@ export function Chats() {
                     </div>
                     <div className="room-contact-info">
                       <h3>{activeChat.name || activeChat.id.split('@')[0]}</h3>
-                      <span>{activeChat.id}</span>
                       <div className="room-contact-meta">
                         <span className={isConnected ? 'meta-ok' : 'meta-warn'}>
                           {isConnected ? 'Connected' : 'Waiting for sync'}
@@ -1182,6 +1181,18 @@ export function Chats() {
                         <span>{selectedChannelName}</span>
                       </div>
                     </div>
+                  </div>
+                  <div className="room-header-actions">
+                    <button
+                      type="button"
+                      className={`room-info-btn ${showInfo ? 'active' : ''}`}
+                      title="Chat info"
+                      aria-label="Chat info"
+                      aria-expanded={showInfo}
+                      onClick={() => setShowInfo(v => !v)}
+                    >
+                      <Info size={18} />
+                    </button>
                   </div>
                 </header>
 
@@ -1353,8 +1364,20 @@ export function Chats() {
                                     </>
                                   );
                                 }
-                                // Only reached when there's truly no media and no text to show
-                                // (e.g. media payload missing/unfetched for a non-text type).
+                                // Known media type whose payload isn't available yet (not downloaded):
+                                // show a friendly typed placeholder instead of "unsupported".
+                                if (isMediaMessage) {
+                                  const label =
+                                    QUOTE_MEDIA_LABELS[msg.type] ||
+                                    t('chats.mediaMessage', { defaultValue: 'Media message' });
+                                  return (
+                                    <div className="message-media-placeholder">
+                                      <QuotedMediaIcon type={msg.type} />
+                                      <span>{label}</span>
+                                    </div>
+                                  );
+                                }
+                                // Truly nothing to show: no media, no text, unknown type.
                                 return (
                                   <div className="message-text message-unsupported">
                                     {t('chats.unsupportedMessage', { defaultValue: 'Unsupported message type' })}
@@ -1565,115 +1588,6 @@ export function Chats() {
                   </form>
                 </footer>
               </div>
-
-              {/* Chat Info drawer — right-side glass panel built entirely from in-memory data. */}
-              {showInfo && (
-                <>
-                  <div className="chat-info-scrim" onClick={() => setShowInfo(false)} aria-hidden="true" />
-                  <aside className="chat-info-drawer" role="dialog" aria-label="Chat info">
-                    <div className="chat-info-header">
-                      <span className="chat-info-title">Chat info</span>
-                      <button
-                        type="button"
-                        className="chat-info-close"
-                        onClick={() => setShowInfo(false)}
-                        aria-label="Close chat info"
-                      >
-                        <X size={18} />
-                      </button>
-                    </div>
-
-                    <div className="chat-info-body">
-                      <div className="chat-info-identity">
-                        <div className="chat-info-avatar">
-                          {activeChat.isGroup ? <Users size={26} /> : <User size={26} />}
-                        </div>
-                        <div className="chat-info-name">{activeChat.name || activeChat.id.split('@')[0]}</div>
-                        <span className={`chat-info-type ${activeChat.isGroup ? 'group' : 'direct'}`}>
-                          {activeChat.isGroup ? 'Group chat' : 'Direct chat'}
-                        </span>
-                      </div>
-
-                      <div className="chat-info-section">
-                        <div className="chat-info-section-title">Details</div>
-                        <div className="chat-info-row">
-                          <span>Chat ID</span>
-                          <strong className="mono" title={activeChat.id}>{activeChat.id}</strong>
-                        </div>
-                        {!activeChat.isGroup && (
-                          <div className="chat-info-row">
-                            <span>Phone number</span>
-                            <strong className="mono">{activeChatPhone || '—'}</strong>
-                          </div>
-                        )}
-                        <div className="chat-info-row">
-                          <span>Type</span>
-                          <strong>{activeChat.isGroup ? 'Group' : 'Direct'}</strong>
-                        </div>
-                        <div className="chat-info-row">
-                          <span>Last activity</span>
-                          <strong>{activeChat.timestamp ? formatChatTime(activeChat.timestamp) : '—'}</strong>
-                        </div>
-                        <div className="chat-info-row">
-                          <span>Unread</span>
-                          <strong>{activeChatUnread}</strong>
-                        </div>
-                      </div>
-
-                      <div className="chat-info-section">
-                        <div className="chat-info-section-title">Channel</div>
-                        <div className="chat-info-row">
-                          <span>Session</span>
-                          <strong>{selectedChannelName}</strong>
-                        </div>
-                        <div className="chat-info-row">
-                          <span>Session phone</span>
-                          <strong className="mono">{activeChannelPhone || t('chats.noPhone')}</strong>
-                        </div>
-                        <div className="chat-info-row">
-                          <span>Connection</span>
-                          <strong className={isConnected ? 'ok' : 'warn'}>
-                            {isConnected ? 'Connected' : 'Reconnecting'}
-                          </strong>
-                        </div>
-                      </div>
-
-                      <div className="chat-info-section">
-                        <div className="chat-info-section-title">Messages</div>
-                        <div className="chat-info-stats">
-                          <div className="chat-info-stat">
-                            <strong>{activeChatMessageCount}</strong>
-                            <span>Loaded</span>
-                          </div>
-                          <div className="chat-info-stat">
-                            <strong>{Math.max(messagesTotal, activeChatMessageCount)}</strong>
-                            <span>Total</span>
-                          </div>
-                          <div className="chat-info-stat">
-                            <strong>{messageStats.incoming}</strong>
-                            <span>Incoming</span>
-                          </div>
-                          <div className="chat-info-stat">
-                            <strong>{messageStats.outgoing}</strong>
-                            <span>Outgoing</span>
-                          </div>
-                          <div className="chat-info-stat">
-                            <strong>{messageStats.media}</strong>
-                            <span>Media</span>
-                          </div>
-                        </div>
-                        <div className="chat-info-note">Stats reflect loaded messages only.</div>
-                      </div>
-
-                      <div className="chat-info-section">
-                        <div className="chat-info-section-title">Labels</div>
-                        <div className="chat-info-empty">Labels are not available yet.</div>
-                      </div>
-                    </div>
-                  </aside>
-                </>
-              )}
-              </>
             ) : (
               <div className="chats-room-placeholder">
                 <div className="chats-room-placeholder-orb">
@@ -1694,6 +1608,115 @@ export function Chats() {
               </div>
             )}
           </main>
+
+          {/* Chat Info — persistent right column on desktop, slide-over on tablet/mobile.
+              Built entirely from in-memory data (no fetching). */}
+          {showInfo && activeChat && (
+            <>
+              <div className="chat-info-scrim" onClick={() => setShowInfo(false)} aria-hidden="true" />
+              <aside className="chat-info-panel" role="complementary" aria-label="Chat info">
+                <div className="chat-info-header">
+                  <span className="chat-info-title">Chat info</span>
+                  <button
+                    type="button"
+                    className="chat-info-close"
+                    onClick={() => setShowInfo(false)}
+                    aria-label="Close chat info"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className="chat-info-body">
+                  <div className="chat-info-identity">
+                    <div className="chat-info-avatar">
+                      {activeChat.isGroup ? <Users size={26} /> : <User size={26} />}
+                    </div>
+                    <div className="chat-info-name">{activeChat.name || activeChat.id.split('@')[0]}</div>
+                    <span className={`chat-info-type ${activeChat.isGroup ? 'group' : 'direct'}`}>
+                      {activeChat.isGroup ? 'Group chat' : 'Direct chat'}
+                    </span>
+                  </div>
+
+                  <div className="chat-info-section">
+                    <div className="chat-info-section-title">Details</div>
+                    <div className="chat-info-row">
+                      <span>Chat ID</span>
+                      <strong className="mono" title={activeChat.id}>{activeChat.id}</strong>
+                    </div>
+                    {!activeChat.isGroup && (
+                      <div className="chat-info-row">
+                        <span>Phone number</span>
+                        <strong className="mono">{activeChatPhone || '—'}</strong>
+                      </div>
+                    )}
+                    <div className="chat-info-row">
+                      <span>Type</span>
+                      <strong>{activeChat.isGroup ? 'Group' : 'Direct'}</strong>
+                    </div>
+                    <div className="chat-info-row">
+                      <span>Last activity</span>
+                      <strong>{activeChat.timestamp ? formatChatTime(activeChat.timestamp) : '—'}</strong>
+                    </div>
+                    <div className="chat-info-row">
+                      <span>Unread</span>
+                      <strong>{activeChatUnread}</strong>
+                    </div>
+                  </div>
+
+                  <div className="chat-info-section">
+                    <div className="chat-info-section-title">Channel</div>
+                    <div className="chat-info-row">
+                      <span>Session</span>
+                      <strong>{selectedChannelName}</strong>
+                    </div>
+                    <div className="chat-info-row">
+                      <span>Session phone</span>
+                      <strong className="mono">{activeChannelPhone || t('chats.noPhone')}</strong>
+                    </div>
+                    <div className="chat-info-row">
+                      <span>Connection</span>
+                      <strong className={isConnected ? 'ok' : 'warn'}>
+                        {isConnected ? 'Connected' : 'Reconnecting'}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <div className="chat-info-section">
+                    <div className="chat-info-section-title">Messages</div>
+                    <div className="chat-info-stats">
+                      <div className="chat-info-stat">
+                        <strong>{activeChatMessageCount}</strong>
+                        <span>Loaded</span>
+                      </div>
+                      <div className="chat-info-stat">
+                        <strong>{Math.max(messagesTotal, activeChatMessageCount)}</strong>
+                        <span>Total</span>
+                      </div>
+                      <div className="chat-info-stat">
+                        <strong>{messageStats.incoming}</strong>
+                        <span>Incoming</span>
+                      </div>
+                      <div className="chat-info-stat">
+                        <strong>{messageStats.outgoing}</strong>
+                        <span>Outgoing</span>
+                      </div>
+                      <div className="chat-info-stat">
+                        <strong>{messageStats.media}</strong>
+                        <span>Media</span>
+                      </div>
+                    </div>
+                    <div className="chat-info-note">Stats reflect loaded messages only.</div>
+                  </div>
+
+                  <div className="chat-info-section">
+                    <div className="chat-info-section-title">Labels</div>
+                    <div className="chat-info-empty">Labels are not available yet.</div>
+                  </div>
+                </div>
+              </aside>
+            </>
+          )}
         </div>
       )}
     </div>
