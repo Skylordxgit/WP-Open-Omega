@@ -1,9 +1,11 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, type CSSProperties } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import {
   Search,
   Send,
   Loader2,
+  ChevronDown,
+  Info,
   User,
   Users,
   AlertCircle,
@@ -13,13 +15,14 @@ import {
   X,
   CornerUpLeft,
   Trash2,
-  Funnel,
   ArrowUpDown,
   Phone,
   Wifi,
   Clock3,
 } from 'lucide-react';
 import {
+  contactApi,
+  labelApi,
   sessionApi,
   messageApi,
   asMessageType,
@@ -28,6 +31,8 @@ import {
   type ChatMessage,
   type LiveChatHistoryMessage,
   type MessageType,
+  type SavedContactRecord,
+  type ChatLabel,
 } from '../services/api';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
@@ -43,6 +48,12 @@ interface ChatMessageView extends ChatMessage {
     quotedMessage?: { id: string; body: string };
     reactions?: Record<string, string>;
   };
+}
+
+interface InboxChat extends Chat {
+  sessionId: string;
+  sessionName: string;
+  sessionPhone?: string;
 }
 
 // Delivery acks must only ADVANCE the tick, never regress it. The backend DB update is forward-only
@@ -94,6 +105,60 @@ const getMediaSrc = (media?: MessageMedia): string => {
     return media.data;
   }
   return `data:${media.mimetype};base64,${media.data}`;
+};
+
+const looksLikeBase64Payload = (value: string) =>
+  value.length > 120 && /^[A-Za-z0-9+/=\r\n]+$/.test(value) && !/\s{2,}/.test(value);
+
+const inferMediaFromBody = (body?: string): MessageMedia | null => {
+  if (!body) return null;
+
+  if (body.startsWith('data:')) {
+    const match = body.match(/^data:([^;]+);base64,(.+)$/);
+    if (!match) return null;
+    return { mimetype: match[1], data: match[2] };
+  }
+
+  if (!looksLikeBase64Payload(body)) {
+    return null;
+  }
+
+  const trimmed = body.replace(/\s+/g, '');
+  if (trimmed.startsWith('/9j/')) {
+    return { mimetype: 'image/jpeg', data: trimmed, filename: 'image.jpg' };
+  }
+  if (trimmed.startsWith('iVBOR')) {
+    return { mimetype: 'image/png', data: trimmed, filename: 'image.png' };
+  }
+  if (trimmed.startsWith('R0lGOD')) {
+    return { mimetype: 'image/gif', data: trimmed, filename: 'image.gif' };
+  }
+  if (trimmed.startsWith('UklGR')) {
+    return { mimetype: 'image/webp', data: trimmed, filename: 'image.webp' };
+  }
+  if (trimmed.startsWith('JVBERi0')) {
+    return { mimetype: 'application/pdf', data: trimmed, filename: 'document.pdf' };
+  }
+
+  return { mimetype: 'application/octet-stream', data: trimmed, filename: 'attachment.bin' };
+};
+
+const CHAT_HISTORY_LIMIT = 300;
+const CHAT_STATUS_STORAGE_KEY = 'openwa_chat_statuses_v1';
+
+const normalizeContactNumber = (value?: string | null) => (value || '').replace(/[^0-9+]/g, '').trim();
+
+const getDirectPhoneCandidate = (chat: Chat | null) =>
+  chat && !chat.isGroup ? normalizeContactNumber(chat.id.split('@')[0]) : '';
+
+const loadStoredChatStatuses = (): Record<string, 'open' | 'closed'> => {
+  try {
+    const raw = localStorage.getItem(CHAT_STATUS_STORAGE_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw) as Record<string, 'open' | 'closed'>;
+  } catch {
+    return {};
+  }
 };
 
 const sortMessagesAscending = (items: ChatMessageView[]) =>
@@ -161,17 +226,23 @@ export function Chats() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [sessionStatusById, setSessionStatusById] = useState<Record<string, string>>({});
   const [selectedSessionId, setSelectedSessionId] = useState<string>('');
+  const [selectedChannelIds, setSelectedChannelIds] = useState<string[]>([]);
+  const [showChannelMenu, setShowChannelMenu] = useState<boolean>(false);
   const [loadingSessions, setLoadingSessions] = useState<boolean>(true);
+  const [savedContacts, setSavedContacts] = useState<SavedContactRecord[]>([]);
+  const [chatLifecycleByKey, setChatLifecycleByKey] = useState<Record<string, 'open' | 'closed'>>(loadStoredChatStatuses);
 
   // Chats list
-  const [chats, setChats] = useState<Chat[]>([]);
+  const [chats, setChats] = useState<InboxChat[]>([]);
   const [loadingChats, setLoadingChats] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [inboxView, setInboxView] = useState<'all' | 'unread' | 'direct' | 'groups'>('all');
+  const [chatStateFilter, setChatStateFilter] = useState<'all' | 'open' | 'closed'>('all');
+  const [showChatStateMenu, setShowChatStateMenu] = useState<boolean>(false);
   const [sortMode, setSortMode] = useState<'recent' | 'oldest'>('recent');
 
   // Selected chat & message history
-  const [activeChat, setActiveChat] = useState<Chat | null>(null);
+  const [activeChat, setActiveChat] = useState<InboxChat | null>(null);
   const [messages, setMessages] = useState<ChatMessageView[]>([]);
   const [loadingMessages, setLoadingMessages] = useState<boolean>(false);
   const [messageInput, setMessageInput] = useState<string>('');
@@ -186,6 +257,17 @@ export function Chats() {
   } | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState<boolean>(false);
+  const [showChatInfo, setShowChatInfo] = useState<boolean>(false);
+  const [contactPhone, setContactPhone] = useState<string>('');
+  const [loadingContactPhone, setLoadingContactPhone] = useState<boolean>(false);
+  const [contactEmailInput, setContactEmailInput] = useState<string>('');
+  const [savingContactInfo, setSavingContactInfo] = useState<boolean>(false);
+  const [availableLabels, setAvailableLabels] = useState<ChatLabel[]>([]);
+  const [chatLabels, setChatLabels] = useState<ChatLabel[]>([]);
+  const [labelsAvailable, setLabelsAvailable] = useState<boolean>(true);
+  const [selectedLabelToAdd, setSelectedLabelToAdd] = useState<string>('');
+  const activeSessionId = activeChat?.sessionId || selectedSessionId;
+  const selectedChannels = sessions.filter(session => selectedChannelIds.includes(session.id));
 
   // References
   const chatBottomRef = useRef<HTMLDivElement | null>(null);
@@ -211,6 +293,7 @@ export function Chats() {
         );
         if (readySessions.length > 0) {
           setSelectedSessionId(readySessions[0].id);
+          setSelectedChannelIds(readySessions.map(session => session.id));
         }
       } catch (err) {
         showErrorToast(t('chats.errors.loadSessions'), err instanceof Error ? err.message : undefined);
@@ -223,12 +306,32 @@ export function Chats() {
 
   // 2. Fetch chats when active session changes
   const loadChats = useCallback(
-    async (sessionId: string) => {
-      if (!sessionId) return;
+    async (sessionIds: string[]) => {
+      if (sessionIds.length === 0) {
+        setChats([]);
+        return;
+      }
       try {
         setLoadingChats(true);
-        const data = await sessionApi.getChats(sessionId);
-        const sorted = [...data].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        const results = await Promise.allSettled(sessionIds.map(sessionId => sessionApi.getChats(sessionId)));
+        const aggregated = results.flatMap((result, index) => {
+          if (result.status !== 'fulfilled') {
+            return [];
+          }
+
+          const session = sessions.find(item => item.id === sessionIds[index]);
+          return result.value.map(
+            chat =>
+              ({
+                ...chat,
+                sessionId: sessionIds[index],
+                sessionName: session?.name || sessionIds[index],
+                sessionPhone: session?.phone,
+              }) satisfies InboxChat,
+          );
+        });
+
+        const sorted = [...aggregated].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
         setChats(sorted);
       } catch (err) {
         showErrorToast(t('chats.errors.loadChats'), err instanceof Error ? err.message : undefined);
@@ -237,38 +340,97 @@ export function Chats() {
         setLoadingChats(false);
       }
     },
-    [t, showErrorToast],
+    [sessions, t, showErrorToast],
   );
 
   useEffect(() => {
-    if (selectedSessionId) {
-      void loadChats(selectedSessionId);
+    if (selectedChannelIds.length > 0) {
+      if (!selectedSessionId || !selectedChannelIds.includes(selectedSessionId)) {
+        setSelectedSessionId(selectedChannelIds[0]);
+      }
+      void loadChats(selectedChannelIds);
       setActiveChat(null);
       setMessages([]);
       setAttachment(null);
       setPreviewUrl(null);
+    } else {
+      setChats([]);
+      setActiveChat(null);
+      setMessages([]);
     }
-  }, [selectedSessionId, loadChats]);
+  }, [selectedChannelIds, selectedSessionId, loadChats]);
+
+  useEffect(() => {
+    if (!activeSessionId) {
+      setSavedContacts([]);
+      return;
+    }
+
+    let cancelled = false;
+    contactApi
+      .listSaved(activeSessionId)
+      .then(result => {
+        if (!cancelled) {
+          setSavedContacts(result);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSavedContacts([]);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSessionId]);
+
+  useEffect(() => {
+    localStorage.setItem(CHAT_STATUS_STORAGE_KEY, JSON.stringify(chatLifecycleByKey));
+  }, [chatLifecycleByKey]);
+
+  useEffect(() => {
+    if (!activeSessionId) {
+      setAvailableLabels([]);
+      setLabelsAvailable(true);
+      return;
+    }
+
+    labelApi
+      .list(activeSessionId)
+      .then(result => {
+        setAvailableLabels(result);
+        setLabelsAvailable(true);
+      })
+      .catch(() => {
+        setAvailableLabels([]);
+        setLabelsAvailable(false);
+      });
+  }, [activeSessionId]);
 
   const markChatRead = useCallback(
-    (chatId: string) => {
-      void sessionApi.markChatRead(selectedSessionId, chatId).catch(err => {
+    (sessionId: string, chatId: string) => {
+      const currentStatus = sessionStatusById[sessionId];
+      if (!sessionId || currentStatus && currentStatus !== 'ready') {
+        return;
+      }
+      void sessionApi.markChatRead(sessionId, chatId).catch(err => {
         showWarningToast(t('chats.errors.markRead'), err instanceof Error ? err.message : undefined);
       });
     },
-    [selectedSessionId, t, showWarningToast],
+    [sessionStatusById, t, showWarningToast],
   );
 
   // 3. WebSocket integration for real-time messages
   const handleIncomingMessage = useCallback(
     (event: { sessionId: string; message: Record<string, unknown> }) => {
-      if (event.sessionId !== selectedSessionId) return;
+      if (!selectedChannelIds.includes(event.sessionId)) return;
 
       const newMsg = event.message as unknown as IncomingWsMessage;
 
       // Update message list if the message belongs to the currently active chat
-      if (activeChat && newMsg.chatId === activeChat.id) {
-        markChatRead(activeChat.id);
+      if (activeChat && event.sessionId === activeChat.sessionId && newMsg.chatId === activeChat.id) {
+        markChatRead(activeChat.sessionId, activeChat.id);
 
         const mappedMessage: ChatMessageView = {
           id: newMsg.id,
@@ -298,9 +460,9 @@ export function Chats() {
 
       // Update sidebar chat list
       setChats(prevChats => {
-        const chatIndex = prevChats.findIndex(c => c.id === newMsg.chatId);
+        const chatIndex = prevChats.findIndex(c => c.sessionId === event.sessionId && c.id === newMsg.chatId);
         if (chatIndex === -1) {
-          void loadChats(selectedSessionId);
+          void loadChats(selectedChannelIds);
           return prevChats;
         }
 
@@ -309,7 +471,7 @@ export function Chats() {
         targetChat.lastMessage = newMsg.body;
         targetChat.timestamp = newMsg.timestamp;
 
-        if (!newMsg.fromMe && (!activeChat || activeChat.id !== targetChat.id)) {
+        if (!newMsg.fromMe && (!activeChat || activeChat.id !== targetChat.id || activeChat.sessionId !== event.sessionId)) {
           targetChat.unreadCount = (targetChat.unreadCount || 0) + 1;
         }
 
@@ -318,12 +480,12 @@ export function Chats() {
         return updatedChats;
       });
     },
-    [selectedSessionId, activeChat, loadChats, markChatRead],
+    [selectedChannelIds, activeChat, loadChats, markChatRead],
   );
 
   const handleIncomingMessageAck = useCallback(
     (event: { sessionId: string; messageId: string; status: ChatMessageView['status'] }) => {
-      if (event.sessionId !== selectedSessionId) return;
+      if (event.sessionId !== activeSessionId) return;
 
       setMessages(prev =>
         prev.map(msg => {
@@ -336,12 +498,12 @@ export function Chats() {
         }),
       );
     },
-    [selectedSessionId],
+    [activeSessionId],
   );
 
   const handleIncomingMessageReaction = useCallback(
     (event: { sessionId: string; messageId: string; reactions: Record<string, string> }) => {
-      if (event.sessionId !== selectedSessionId) return;
+      if (event.sessionId !== activeSessionId) return;
 
       setMessages(prev =>
         prev.map(msg => {
@@ -353,12 +515,12 @@ export function Chats() {
         }),
       );
     },
-    [selectedSessionId],
+    [activeSessionId],
   );
 
   const handleIncomingMessageRevoked = useCallback(
     (event: { sessionId: string; id: string; type: string }) => {
-      if (event.sessionId !== selectedSessionId) return;
+      if (event.sessionId !== activeSessionId) return;
 
       setMessages(prev =>
         prev.map(msg => {
@@ -370,7 +532,7 @@ export function Chats() {
         }),
       );
     },
-    [selectedSessionId],
+    [activeSessionId],
   );
 
   const handleSessionStatus = useCallback((event: { sessionId: string; status: string }) => {
@@ -389,31 +551,35 @@ export function Chats() {
   });
 
   useEffect(() => {
-    if (selectedSessionId && isConnected) {
-      subscribe(selectedSessionId, [
-        'session.status',
-        'message.received',
-        'message.sent',
-        'message.ack',
-        'message.reaction',
-        'message.revoked',
-      ]);
+    if (selectedChannelIds.length > 0 && isConnected) {
+      for (const sessionId of selectedChannelIds) {
+        subscribe(sessionId, [
+          'session.status',
+          'message.received',
+          'message.sent',
+          'message.ack',
+          'message.reaction',
+          'message.revoked',
+        ]);
+      }
       return () => {
-        unsubscribe(selectedSessionId);
+        for (const sessionId of selectedChannelIds) {
+          unsubscribe(sessionId);
+        }
       };
     }
-  }, [selectedSessionId, isConnected, subscribe, unsubscribe]);
+  }, [selectedChannelIds, isConnected, subscribe, unsubscribe]);
 
   // 4. Fetch message history for the selected chat
   const loadMessages = useCallback(
-    async (chatId: string) => {
-      if (!selectedSessionId || !chatId) return;
+    async (sessionId: string, chatId: string) => {
+      if (!sessionId || !chatId) return;
       try {
         setLoadingMessages(true);
-        markChatRead(chatId);
+        markChatRead(sessionId, chatId);
         const [storedResult, liveResult] = await Promise.allSettled([
-          sessionApi.getChatMessages(selectedSessionId, chatId, 100),
-          sessionApi.getChatHistory(selectedSessionId, chatId, 100, false),
+          sessionApi.getChatMessages(sessionId, chatId, CHAT_HISTORY_LIMIT),
+          sessionApi.getChatHistory(sessionId, chatId, CHAT_HISTORY_LIMIT, false),
         ]);
 
         const storedMessages =
@@ -435,15 +601,15 @@ export function Chats() {
         setLoadingMessages(false);
       }
     },
-    [selectedSessionId, markChatRead, t, showErrorToast],
+    [markChatRead, t, showErrorToast],
   );
 
   const handleReactMessage = async (msg: ChatMessageView, emoji: string) => {
-    if (!selectedSessionId || !activeChat) return;
+    if (!activeSessionId || !activeChat) return;
 
     const msgId = msg.waMessageId || msg.id;
     const currentReactions = msg.metadata?.reactions || {};
-    const sessionPhone = sessions.find(s => s.id === selectedSessionId)?.phone || 'me';
+    const sessionPhone = sessions.find(s => s.id === activeSessionId)?.phone || 'me';
 
     let alreadyReacted = false;
     for (const [sender, emo] of Object.entries(currentReactions)) {
@@ -456,7 +622,7 @@ export function Chats() {
     const emojiToSend = alreadyReacted ? '' : emoji;
 
     try {
-      await messageApi.react(selectedSessionId, {
+      await messageApi.react(activeSessionId, {
         chatId: activeChat.id,
         messageId: msgId,
         emoji: emojiToSend,
@@ -483,13 +649,13 @@ export function Chats() {
   };
 
   const handleDeleteMessage = async (msg: ChatMessageView) => {
-    if (!selectedSessionId || !activeChat) return;
+    if (!activeSessionId || !activeChat) return;
     const msgId = msg.waMessageId || msg.id;
 
     if (!window.confirm(t('chats.deleteConfirm'))) return;
 
     try {
-      await messageApi.delete(selectedSessionId, {
+      await messageApi.delete(activeSessionId, {
         chatId: activeChat.id,
         messageId: msgId,
         forEveryone: true,
@@ -510,8 +676,10 @@ export function Chats() {
 
   useEffect(() => {
     if (activeChat) {
-      void loadMessages(activeChat.id);
-      setChats(prev => prev.map(c => (c.id === activeChat.id ? { ...c, unreadCount: 0 } : c)));
+      void loadMessages(activeChat.sessionId, activeChat.id);
+      setChats(prev =>
+        prev.map(c => (c.id === activeChat.id && c.sessionId === activeChat.sessionId ? { ...c, unreadCount: 0 } : c)),
+      );
     } else {
       setMessages([]);
     }
@@ -557,10 +725,66 @@ export function Chats() {
     setShowEmojiPicker(false);
   };
 
+  const handleSaveChatInfo = async () => {
+    if (!activeSessionId || !activeChat || activeChat.isGroup) return;
+
+    const number = normalizeContactNumber(contactPhone || directPhoneCandidate);
+    if (!number) return;
+
+    setSavingContactInfo(true);
+    try {
+      const next = await contactApi.saveBulk(activeSessionId, [
+        {
+          name: activeChat.name || undefined,
+          number,
+          email: contactEmailInput.trim() || undefined,
+          source: 'session',
+        },
+      ]);
+      setSavedContacts(next);
+    } catch (err) {
+      showWarningToast('Failed to save contact info', err instanceof Error ? err.message : undefined);
+    } finally {
+      setSavingContactInfo(false);
+    }
+  };
+
+  const handleToggleChatLifecycle = (chatId: string) => {
+    const key = getChatWorkflowKey(activeChat?.sessionId || activeSessionId || '', chatId);
+    setChatLifecycleByKey(current => ({
+      ...current,
+      [key]: current[key] === 'closed' ? 'open' : 'closed',
+    }));
+  };
+
+  const handleAddChatLabel = async () => {
+    if (!activeSessionId || !activeChat || !selectedLabelToAdd) return;
+    try {
+      await labelApi.addToChat(activeSessionId, activeChat.id, selectedLabelToAdd);
+      const added = availableLabels.find(label => label.id === selectedLabelToAdd);
+      if (added && !chatLabels.some(label => label.id === added.id)) {
+        setChatLabels(current => [...current, added]);
+      }
+      setSelectedLabelToAdd('');
+    } catch (err) {
+      showWarningToast('Failed to add tag', err instanceof Error ? err.message : undefined);
+    }
+  };
+
+  const handleRemoveChatLabel = async (labelId: string) => {
+    if (!activeSessionId || !activeChat) return;
+    try {
+      await labelApi.removeFromChat(activeSessionId, activeChat.id, labelId);
+      setChatLabels(current => current.filter(label => label.id !== labelId));
+    } catch (err) {
+      showWarningToast('Failed to remove tag', err instanceof Error ? err.message : undefined);
+    }
+  };
+
   // 7. Handle sending a message / media
   const handleSend = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!selectedSessionId || !activeChat || sending) return;
+    if (!activeSessionId || !activeChat || sending) return;
 
     const textToSend = messageInput.trim();
     if (!textToSend && !attachment) return;
@@ -620,20 +844,20 @@ export function Chats() {
         else if (mime.startsWith('video/')) mediaType = 'video';
         else if (mime.startsWith('audio/')) mediaType = 'audio';
 
-        result = await messageApi.sendMedia(selectedSessionId, activeChat.id, mediaType, {
+        result = await messageApi.sendMedia(activeSessionId, activeChat.id, mediaType, {
           base64: currentAttachment.base64,
           mimetype: currentAttachment.mimetype,
           filename: currentAttachment.filename,
           caption: mediaType !== 'audio' ? textToSend : undefined,
         });
       } else if (currentReplyingTo) {
-        result = await messageApi.reply(selectedSessionId, {
+        result = await messageApi.reply(activeSessionId, {
           chatId: activeChat.id,
           quotedMessageId: currentReplyingTo.waMessageId || currentReplyingTo.id,
           text: textToSend,
         });
       } else {
-        result = await messageApi.sendText(selectedSessionId, activeChat.id, textToSend);
+        result = await messageApi.sendText(activeSessionId, activeChat.id, textToSend);
       }
 
       setMessages(prev => {
@@ -652,7 +876,7 @@ export function Chats() {
 
       // Update sidebar chat list (move active chat to the top with the new snippet)
       setChats(prevChats => {
-        const chatIndex = prevChats.findIndex(c => c.id === activeChat.id);
+        const chatIndex = prevChats.findIndex(c => c.id === activeChat.id && c.sessionId === activeChat.sessionId);
         if (chatIndex === -1) return prevChats;
         const updatedChats = [...prevChats];
         const target = { ...updatedChats[chatIndex] };
@@ -679,15 +903,77 @@ export function Chats() {
   };
 
   const formatLastMessageSnippet = (chat: Chat) => chat.lastMessage || '';
-  const selectedSession = sessions.find(session => session.id === selectedSessionId) || null;
+  const getChatWorkflowKey = useCallback(
+    (sessionId: string, chatId: string) => `${sessionId}:${chatId}`,
+    [],
+  );
+  const getChatLifecycle = useCallback(
+    (sessionId: string, chatId: string) => chatLifecycleByKey[getChatWorkflowKey(sessionId, chatId)] || 'open',
+    [chatLifecycleByKey, getChatWorkflowKey],
+  );
+  const directPhoneCandidate = getDirectPhoneCandidate(activeChat);
+  const matchingSavedContact =
+    activeChat && !activeChat.isGroup
+      ? savedContacts.find(contact => normalizeContactNumber(contact.number) === normalizeContactNumber(contactPhone || directPhoneCandidate))
+      : null;
   const totalUnread = chats.reduce((sum, chat) => sum + (chat.unreadCount || 0), 0);
   const directChats = chats.filter(chat => !chat.isGroup).length;
   const groupChats = chats.filter(chat => chat.isGroup).length;
-  const selectedSessionStatus = sessionStatusById[selectedSessionId] ?? selectedSession?.status ?? 'disconnected';
-  const selectedSessionOnline = isConnected && selectedSessionStatus === 'ready';
-  const onlineSessionsCount = selectedSessionOnline ? 1 : 0;
+  const openChatsCount = chats.filter(chat => getChatLifecycle(chat.sessionId, chat.id) === 'open').length;
+  const closedChatsCount = chats.filter(chat => getChatLifecycle(chat.sessionId, chat.id) === 'closed').length;
+  const onlineSessionsCount = selectedChannels.filter(
+    session => sessionStatusById[session.id] === 'ready' || session.status === 'ready',
+  ).length;
   const activeChatMessageCount = messages.length;
   const activeChatUnread = activeChat?.unreadCount || 0;
+  const activeChatLifecycle = activeChat ? getChatLifecycle(activeChat.sessionId, activeChat.id) : 'open';
+
+  useEffect(() => {
+    if (!activeChat || activeChat.isGroup) {
+      setContactPhone('');
+      setContactEmailInput('');
+      setLoadingContactPhone(false);
+      return;
+    }
+
+    const fallbackPhone = getDirectPhoneCandidate(activeChat);
+    setContactPhone(fallbackPhone);
+    setLoadingContactPhone(true);
+
+    contactApi
+      .resolvePhone(activeChat.sessionId, activeChat.id)
+      .then(result => {
+        setContactPhone(normalizeContactNumber(result.phone) || fallbackPhone);
+      })
+      .catch(() => {
+        setContactPhone(fallbackPhone);
+      })
+      .finally(() => {
+        setLoadingContactPhone(false);
+      });
+  }, [activeChat]);
+
+  useEffect(() => {
+    setContactEmailInput(matchingSavedContact?.email || '');
+  }, [matchingSavedContact?.email]);
+
+  useEffect(() => {
+    if (!activeChat || !labelsAvailable) {
+      setChatLabels([]);
+      setSelectedLabelToAdd('');
+      return;
+    }
+
+    labelApi
+      .listForChat(activeChat.sessionId, activeChat.id)
+      .then(result => {
+        setChatLabels(result);
+        setSelectedLabelToAdd('');
+      })
+      .catch(() => {
+        setChatLabels([]);
+      });
+  }, [activeChat, labelsAvailable]);
 
   const formatChatTime = (timestamp?: number) => {
     if (!timestamp) return '';
@@ -708,12 +994,15 @@ export function Chats() {
     .filter(chat => {
       const matchesSearch =
         chat.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        chat.sessionName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         chat.id.toLowerCase().includes(searchQuery.toLowerCase());
 
       if (!matchesSearch) return false;
-      if (inboxView === 'unread') return (chat.unreadCount || 0) > 0;
-      if (inboxView === 'direct') return !chat.isGroup;
-      if (inboxView === 'groups') return chat.isGroup;
+      if (inboxView === 'unread' && (chat.unreadCount || 0) <= 0) return false;
+      if (inboxView === 'direct' && chat.isGroup) return false;
+      if (inboxView === 'groups' && !chat.isGroup) return false;
+      if (chatStateFilter === 'open' && getChatLifecycle(chat.sessionId, chat.id) !== 'open') return false;
+      if (chatStateFilter === 'closed' && getChatLifecycle(chat.sessionId, chat.id) !== 'closed') return false;
       return true;
     })
     .sort((a, b) => {
@@ -729,7 +1018,11 @@ export function Chats() {
         ? 'Direct conversations'
         : inboxView === 'groups'
           ? 'Group conversations'
-          : selectedSession?.name || 'Inbox';
+          : selectedChannelIds.length === sessions.length
+            ? 'All channels'
+            : selectedChannels.length === 1
+              ? selectedChannels[0].name
+              : `${selectedChannels.length} channels`;
 
   const inboxSubtitle =
     inboxView === 'unread'
@@ -780,29 +1073,25 @@ export function Chats() {
             </div>
 
             <div className="chats-rail-group">
-              <div className="chats-rail-label">Active session</div>
+              <div className="chats-rail-label">Connected channels</div>
               <div className="chats-rail-card">
                 <div className="chats-rail-card-top">
                   <div>
-                    <div className="chats-rail-card-title">{selectedSession?.name || 'Session'}</div>
-                    <div className="chats-rail-card-subtitle">{selectedSession?.phone || t('chats.noPhone')}</div>
+                    <div className="chats-rail-card-title">
+                      {selectedChannelIds.length === sessions.length ? 'All WhatsApp channels' : `${selectedChannels.length} selected`}
+                    </div>
+                    <div className="chats-rail-card-subtitle">
+                      {selectedChannels.map(session => session.name).join(', ') || 'Choose one or more connected sessions'}
+                    </div>
                   </div>
                   <span className={`chats-session-badge ${isConnected ? 'online' : 'syncing'}`}>
                     <Wifi size={12} />
                     {isConnected ? 'Live' : 'Syncing'}
                   </span>
                 </div>
-                <select
-                  value={selectedSessionId}
-                  onChange={e => setSelectedSessionId(e.target.value)}
-                  className="session-selector"
-                >
-                  {sessions.map(s => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({s.phone || t('chats.noPhone')})
-                    </option>
-                  ))}
-                </select>
+                <div className="session-selector session-selector-static">
+                  {selectedChannels.length} / {sessions.length} connected WhatsApp accounts included
+                </div>
               </div>
             </div>
 
@@ -888,6 +1177,51 @@ export function Chats() {
             </div>
 
             <div className="chats-inbox-toolbar">
+              <div className="chats-toolbar-menu-wrap">
+                <button
+                  type="button"
+                  className={`chats-toolbar-chip ${selectedChannelIds.length !== sessions.length ? 'active' : ''}`}
+                  onClick={() => setShowChannelMenu(current => !current)}
+                >
+                  {selectedChannelIds.length === sessions.length ? 'All channels' : `${selectedChannelIds.length} channels`}
+                  <ChevronDown size={15} />
+                </button>
+                {showChannelMenu && (
+                  <div className="chats-toolbar-menu chats-toolbar-menu--channels">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedChannelIds(sessions.map(session => session.id));
+                        setShowChannelMenu(false);
+                      }}
+                    >
+                      All channels
+                      <span>{sessions.length}</span>
+                    </button>
+                    {sessions.map(session => {
+                      const checked = selectedChannelIds.includes(session.id);
+                      return (
+                        <label key={session.id} className="channel-menu-option">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              setSelectedChannelIds(current => {
+                                const next = checked ? current.filter(id => id !== session.id) : [...current, session.id];
+                                return next.length > 0 ? next : current;
+                              });
+                            }}
+                          />
+                          <div>
+                            <strong>{session.name}</strong>
+                            <span>{session.phone || t('chats.noPhone')}</span>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
               <div className="chat-search-input">
                 <Search size={18} />
                 <input
@@ -897,13 +1231,32 @@ export function Chats() {
                   onChange={e => setSearchQuery(e.target.value)}
                 />
               </div>
-              <button
-                type="button"
-                className={`chats-toolbar-chip ${inboxView === 'all' ? 'active' : ''}`}
-                onClick={() => setInboxView('all')}
-              >
-                Open
-              </button>
+              <div className="chats-toolbar-menu-wrap">
+                <button
+                  type="button"
+                  className={`chats-toolbar-chip ${chatStateFilter !== 'all' ? 'active' : ''}`}
+                  onClick={() => setShowChatStateMenu(current => !current)}
+                >
+                  {chatStateFilter === 'all' ? 'All' : chatStateFilter === 'open' ? 'Open' : 'Closed'}
+                  <ChevronDown size={15} />
+                </button>
+                {showChatStateMenu && (
+                  <div className="chats-toolbar-menu">
+                    <button type="button" onClick={() => { setChatStateFilter('all'); setShowChatStateMenu(false); }}>
+                      All
+                      <span>{chats.length}</span>
+                    </button>
+                    <button type="button" onClick={() => { setChatStateFilter('open'); setShowChatStateMenu(false); }}>
+                      Open
+                      <span>{openChatsCount}</span>
+                    </button>
+                    <button type="button" onClick={() => { setChatStateFilter('closed'); setShowChatStateMenu(false); }}>
+                      Closed
+                      <span>{closedChatsCount}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
               <button
                 type="button"
                 className="chats-toolbar-chip"
@@ -911,9 +1264,6 @@ export function Chats() {
               >
                 <ArrowUpDown size={15} />
                 {sortMode === 'recent' ? 'Recent first' : 'Started first'}
-              </button>
-              <button type="button" className="chats-toolbar-icon" aria-label="Filters">
-                <Funnel size={16} />
               </button>
             </div>
 
@@ -930,10 +1280,10 @@ export function Chats() {
                 </div>
               ) : (
                 filteredChats.map(chat => {
-                  const isActive = activeChat?.id === chat.id;
+                  const isActive = activeChat?.id === chat.id && activeChat?.sessionId === chat.sessionId;
                   return (
                     <div
-                      key={chat.id}
+                      key={`${chat.sessionId}:${chat.id}`}
                       className={`chat-item-card ${isActive ? 'active' : ''}`}
                       onClick={() => setActiveChat(chat)}
                     >
@@ -943,9 +1293,12 @@ export function Chats() {
 
                       <div className="chat-item-info">
                         <div className="chat-item-top">
-                          <span className="chat-item-name" title={chat.name || chat.id}>
-                            {chat.name || chat.id.split('@')[0]}
-                          </span>
+                          <div className="chat-item-heading">
+                            <span className="chat-item-name" title={chat.name || chat.id}>
+                              {chat.name || chat.id.split('@')[0]}
+                            </span>
+                            <span className="chat-session-name">{chat.sessionName}</span>
+                          </div>
                           {chat.timestamp && (
                             <span className="chat-item-time">{formatChatTime(chat.timestamp)}</span>
                           )}
@@ -960,12 +1313,29 @@ export function Chats() {
                             <span className={`chat-type-badge ${chat.isGroup ? 'group' : 'direct'}`}>
                               {chat.isGroup ? 'Group' : 'Direct'}
                             </span>
+                            <span className={`chat-state-badge ${getChatLifecycle(chat.sessionId, chat.id)}`}>
+                              {getChatLifecycle(chat.sessionId, chat.id) === 'closed' ? 'Closed' : 'Open'}
+                            </span>
                             {chat.unreadCount > 0 && (
                               <span className="chat-unread-badge">{chat.unreadCount}</span>
                             )}
                           </div>
                         </div>
                       </div>
+
+                      <button
+                        type="button"
+                        className="chat-card-info-btn"
+                        onClick={event => {
+                          event.stopPropagation();
+                          setActiveChat(chat);
+                          setShowChatInfo(true);
+                        }}
+                        aria-label="Open chat info"
+                        title="Open chat info"
+                      >
+                        <Info size={16} />
+                      </button>
                     </div>
                   );
                 })
@@ -985,6 +1355,7 @@ export function Chats() {
                       <h3>{activeChat.name || activeChat.id.split('@')[0]}</h3>
                       <span>{activeChat.id}</span>
                       <div className="room-contact-meta">
+                        <span>{activeChat.sessionName}</span>
                         <span>{activeChat.isGroup ? 'Shared workspace' : '1:1 conversation'}</span>
                         <span>{activeChatMessageCount} messages loaded</span>
                         <span>{activeChatUnread} unread</span>
@@ -997,9 +1368,27 @@ export function Chats() {
                       {isConnected ? 'Connected' : 'Waiting for sync'}
                     </div>
                     <div className="room-header-pill subtle">{activeChat.isGroup ? 'Group' : 'Direct'}</div>
+                    <button
+                      type="button"
+                      className={`room-status-toggle ${activeChatLifecycle}`}
+                      onClick={() => handleToggleChatLifecycle(activeChat.id)}
+                    >
+                      {activeChatLifecycle === 'closed' ? 'Closed' : 'Open'}
+                    </button>
+                    <button
+                      type="button"
+                      className="room-info-btn"
+                      onClick={() => setShowChatInfo(current => !current)}
+                      aria-label="Toggle chat info"
+                      title="Toggle chat info"
+                    >
+                      <Info size={16} />
+                    </button>
                   </div>
                 </header>
 
+                <div className={`room-content ${showChatInfo ? 'with-info' : ''}`}>
+                  <div className="room-thread">
                 <div className="room-messages">
                   {loadingMessages ? (
                     <div className="messages-loading">
@@ -1018,8 +1407,9 @@ export function Chats() {
                         msg.timestamp || Math.floor(new Date(msg.createdAt).getTime() / 1000),
                       );
 
-                      const isMediaMessage = msg.type !== 'text';
-                      const mediaInfo = msg.metadata?.media;
+                      const inferredMedia = !msg.metadata?.media ? inferMediaFromBody(msg.body) : null;
+                      const mediaInfo = msg.metadata?.media || inferredMedia;
+                      const isMediaMessage = msg.type !== 'text' || !!mediaInfo;
 
                       const renderMedia = () => {
                         if (msg.type === 'revoked') return null;
@@ -1096,6 +1486,7 @@ export function Chats() {
                                 <div className="message-text">{t('chats.messageDeleted')}</div>
                               ) : (
                                 msg.body &&
+                                !inferredMedia &&
                                 (!mediaInfo || msg.body !== mediaInfo.filename) && (
                                   <div className="message-text">{msg.body}</div>
                                 )
@@ -1293,6 +1684,135 @@ export function Chats() {
                     </button>
                   </form>
                 </footer>
+                  </div>
+
+                  {showChatInfo && (
+                    <aside className="chat-info-panel">
+                      <div className="chat-info-panel-header">
+                        <div>
+                          <h3>Chat info</h3>
+                          <p>{activeChat.name || activeChat.id.split('@')[0]}</p>
+                        </div>
+                        <button
+                          type="button"
+                          className="chat-info-close-btn"
+                          onClick={() => setShowChatInfo(false)}
+                          aria-label="Close chat info"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+
+                      <div className="chat-info-panel-body">
+                        <div className="chat-info-group">
+                          <span className="chat-info-label">Chat ID</span>
+                          <code className="chat-info-value">{activeChat.id}</code>
+                        </div>
+
+                        <div className="chat-info-group">
+                          <span className="chat-info-label">Phone number</span>
+                          <div className="chat-info-value">
+                            {activeChat.isGroup
+                              ? 'Not available for groups'
+                              : loadingContactPhone
+                                ? 'Resolving...'
+                                : contactPhone || 'Not available'}
+                          </div>
+                        </div>
+
+                        <div className="chat-info-group">
+                          <span className="chat-info-label">Email</span>
+                          <input
+                            type="email"
+                            value={contactEmailInput}
+                            onChange={event => setContactEmailInput(event.target.value)}
+                            placeholder="name@example.com"
+                            className="chat-info-input"
+                            disabled={activeChat.isGroup || savingContactInfo}
+                          />
+                          <span className="chat-info-help">
+                            Save email only from this chat info panel.
+                          </span>
+                        </div>
+
+                        <div className="chat-info-group">
+                          <span className="chat-info-label">Status</span>
+                          <div className="chat-info-value">{activeChatLifecycle === 'closed' ? 'Closed' : 'Open'}</div>
+                        </div>
+
+                        <div className="chat-info-group">
+                          <span className="chat-info-label">Type</span>
+                          <div className="chat-info-value">{activeChat.isGroup ? 'Group chat' : 'Direct chat'}</div>
+                        </div>
+
+                        <div className="chat-info-group">
+                          <span className="chat-info-label">Unread</span>
+                          <div className="chat-info-value">{activeChatUnread}</div>
+                        </div>
+
+                        <div className="chat-info-group">
+                          <span className="chat-info-label">Loaded history</span>
+                          <div className="chat-info-value">{activeChatMessageCount}</div>
+                        </div>
+
+                        <div className="chat-info-group">
+                          <div className="chat-info-row">
+                            <span className="chat-info-label">Tags</span>
+                            {labelsAvailable && availableLabels.length > 0 && (
+                              <div className="chat-info-tag-add">
+                                <select value={selectedLabelToAdd} onChange={event => setSelectedLabelToAdd(event.target.value)}>
+                                  <option value="">Select</option>
+                                  {availableLabels
+                                    .filter(label => !chatLabels.some(chatLabel => chatLabel.id === label.id))
+                                    .map(label => (
+                                      <option key={label.id} value={label.id}>
+                                        {label.name}
+                                      </option>
+                                    ))}
+                                </select>
+                                <button type="button" onClick={() => void handleAddChatLabel()} disabled={!selectedLabelToAdd}>
+                                  Add
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                          {!labelsAvailable ? (
+                            <span className="chat-info-help">Tags are available only when labels are supported by this session.</span>
+                          ) : chatLabels.length === 0 ? (
+                            <span className="chat-info-help">No tags added yet.</span>
+                          ) : (
+                            <div className="chat-info-tags">
+                              {chatLabels.map(label => (
+                                <button
+                                  key={label.id}
+                                  type="button"
+                                  className="chat-info-tag-chip"
+                                  onClick={() => void handleRemoveChatLabel(label.id)}
+                                  style={{ '--tag-color': label.hexColor || '#25d366' } as CSSProperties}
+                                  title="Remove tag"
+                                >
+                                  {label.name}
+                                  <X size={12} />
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="chat-info-panel-footer">
+                        <button
+                          type="button"
+                          className="chat-info-save-btn"
+                          onClick={() => void handleSaveChatInfo()}
+                          disabled={activeChat.isGroup || savingContactInfo || !contactPhone}
+                        >
+                          {savingContactInfo ? <Loader2 className="animate-spin" size={16} /> : 'Save email'}
+                        </button>
+                      </div>
+                    </aside>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="chats-room-placeholder">

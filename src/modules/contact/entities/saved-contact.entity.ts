@@ -21,6 +21,9 @@ export class SavedContact {
   @Column({ type: 'varchar', length: 50 })
   number: string;
 
+  @Column({ type: 'varchar', length: 180, nullable: true })
+  email: string | null;
+
   @Column({ type: 'varchar', length: 20, default: 'imported' })
   source: SavedContactSource;
 

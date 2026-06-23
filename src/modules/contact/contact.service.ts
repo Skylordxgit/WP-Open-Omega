@@ -82,6 +82,7 @@ export class ContactService {
       const current = byNumber.get(normalized) ?? this.savedContactRepository.create({ sessionId, number: normalized });
       current.name = item.name?.trim() || current.name || null;
       current.number = normalized;
+      current.email = item.email?.trim().toLowerCase() || current.email || null;
       current.source = item.source ?? current.source ?? 'imported';
       next.push(current);
       byNumber.set(normalized, current);

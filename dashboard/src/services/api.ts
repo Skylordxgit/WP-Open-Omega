@@ -517,15 +517,25 @@ export interface SavedContactRecord {
   sessionId: string;
   name?: string | null;
   number: string;
+  email?: string | null;
   source: 'imported' | 'session';
   createdAt: string;
   updatedAt: string;
 }
 
+export interface ChatLabel {
+  id: string;
+  name: string;
+  hexColor: string;
+}
+
 export const contactApi = {
   list: (sessionId: string) => request<ContactRecord[]>(`/sessions/${sessionId}/contacts`),
   listSaved: (sessionId: string) => request<SavedContactRecord[]>(`/sessions/${sessionId}/contacts/saved`),
-  saveBulk: (sessionId: string, contacts: Array<{ name?: string; number: string; source?: 'imported' | 'session' }>) =>
+  saveBulk: (
+    sessionId: string,
+    contacts: Array<{ name?: string; number: string; email?: string; source?: 'imported' | 'session' }>,
+  ) =>
     request<SavedContactRecord[]>(`/sessions/${sessionId}/contacts/saved`, {
       method: 'POST',
       body: JSON.stringify({ contacts }),
@@ -536,6 +546,26 @@ export const contactApi = {
     request<{ success: boolean }>(`/sessions/${sessionId}/contacts/saved/${id}`, { method: 'DELETE' }),
   checkNumber: (sessionId: string, number: string) =>
     request<CheckNumberResponse>(`/sessions/${sessionId}/contacts/check/${encodeURIComponent(number)}`),
+  resolvePhone: (sessionId: string, contactId: string) =>
+    request<{ contactId: string; phone: string | null }>(
+      `/sessions/${sessionId}/contacts/${encodeURIComponent(contactId)}/phone`,
+    ),
+};
+
+export const labelApi = {
+  list: (sessionId: string) => request<ChatLabel[]>(`/sessions/${sessionId}/labels`),
+  listForChat: (sessionId: string, chatId: string) =>
+    request<ChatLabel[]>(`/sessions/${sessionId}/labels/chat/${encodeURIComponent(chatId)}`),
+  addToChat: (sessionId: string, chatId: string, labelId: string) =>
+    request<{ success: boolean }>(`/sessions/${sessionId}/labels/chat/${encodeURIComponent(chatId)}`, {
+      method: 'POST',
+      body: JSON.stringify({ labelId }),
+    }),
+  removeFromChat: (sessionId: string, chatId: string, labelId: string) =>
+    request<{ success: boolean }>(
+      `/sessions/${sessionId}/labels/chat/${encodeURIComponent(chatId)}/${encodeURIComponent(labelId)}`,
+      { method: 'DELETE' },
+    ),
 };
 
 // =============================================================================

@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ArrayMaxSize, IsArray, IsIn, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsEmail, IsIn, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class SavedContactItemDto {
@@ -11,6 +11,11 @@ export class SavedContactItemDto {
   @ApiProperty({ description: 'Phone number or WhatsApp identifier', example: '+15551234567' })
   @IsString()
   number: string;
+
+  @ApiPropertyOptional({ description: 'Email address for the contact' })
+  @IsOptional()
+  @IsEmail()
+  email?: string;
 
   @ApiPropertyOptional({ description: 'Where this contact came from', enum: ['imported', 'session'], default: 'imported' })
   @IsOptional()
