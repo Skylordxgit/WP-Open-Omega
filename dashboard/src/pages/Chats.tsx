@@ -7,6 +7,11 @@ import {
   ChevronDown,
   Check,
   Info,
+  Download,
+  FileText,
+  Image as ImageIcon,
+  Music4,
+  Play,
   User,
   Users,
   AlertCircle,
@@ -41,7 +46,27 @@ import { useRole } from '../hooks/useRole';
 import { useToast } from '../components/Toast';
 import './Chats.css';
 
-type MessageMedia = { mimetype: string; filename?: string; data?: string };
+type MessageMedia = {
+  mimetype: string;
+  filename?: string;
+  data?: string;
+  url?: string;
+  mediaUrl?: string;
+  fileUrl?: string;
+  previewUrl?: string;
+  size?: number;
+  filesize?: number;
+  caption?: string;
+};
+
+type ResolvedMediaAttachment = {
+  kind: 'image' | 'video' | 'audio' | 'document';
+  src: string;
+  filename: string;
+  mimetype: string;
+  size?: number;
+  caption?: string;
+};
 
 interface ChatMessageView extends ChatMessage {
   metadata?: {
@@ -101,11 +126,141 @@ const messageTypeFromMime = (mimetype: string): MessageType => {
 };
 
 const getMediaSrc = (media?: MessageMedia): string => {
-  if (!media || !media.data) return '';
+  if (!media) return '';
+  const directUrl = media.url || media.mediaUrl || media.fileUrl || media.previewUrl;
+  if (directUrl) {
+    return directUrl;
+  }
+  if (!media.data) return '';
   if (media.data.startsWith('data:') || media.data.startsWith('http://') || media.data.startsWith('https://')) {
     return media.data;
   }
   return `data:${media.mimetype};base64,${media.data}`;
+};
+
+const extensionMimeMap: Record<string, string> = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  gif: 'image/gif',
+  mp4: 'video/mp4',
+  webm: 'video/webm',
+  pdf: 'application/pdf',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ppt: 'application/vnd.ms-powerpoint',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  zip: 'application/zip',
+  mp3: 'audio/mpeg',
+  mpeg: 'audio/mpeg',
+  ogg: 'audio/ogg',
+  wav: 'audio/wav',
+};
+
+const getMimeFromFilename = (filename?: string) => {
+  if (!filename) return '';
+  const ext = filename.split('.').pop()?.toLowerCase() || '';
+  return extensionMimeMap[ext] || '';
+};
+
+const normalizeMessageMedia = (message: ChatMessageView): MessageMedia | null => {
+  const anyMessage = message as ChatMessageView & Record<string, unknown>;
+  const metadataMedia = message.metadata?.media as MessageMedia | undefined;
+  const inlineMedia = anyMessage.media as MessageMedia | undefined;
+
+  const mediaUrl =
+    (typeof anyMessage.mediaUrl === 'string' && anyMessage.mediaUrl) ||
+    (typeof anyMessage.fileUrl === 'string' && anyMessage.fileUrl) ||
+    (typeof anyMessage.url === 'string' && anyMessage.url) ||
+    (typeof anyMessage.previewUrl === 'string' && anyMessage.previewUrl) ||
+    metadataMedia?.url ||
+    metadataMedia?.mediaUrl ||
+    metadataMedia?.fileUrl ||
+    inlineMedia?.url ||
+    inlineMedia?.mediaUrl ||
+    inlineMedia?.fileUrl;
+
+  const filename =
+    (typeof anyMessage.filename === 'string' && anyMessage.filename) ||
+    metadataMedia?.filename ||
+    inlineMedia?.filename ||
+    (typeof message.body === 'string' && /\.[a-z0-9]{2,6}$/i.test(message.body.trim()) ? message.body.trim() : undefined);
+
+  const mimetype =
+    (typeof anyMessage.mimetype === 'string' && anyMessage.mimetype) ||
+    metadataMedia?.mimetype ||
+    inlineMedia?.mimetype ||
+    getMimeFromFilename(filename) ||
+    '';
+
+  const data =
+    (typeof anyMessage.data === 'string' && anyMessage.data) ||
+    metadataMedia?.data ||
+    inlineMedia?.data;
+
+  const size =
+    (typeof anyMessage.size === 'number' && anyMessage.size) ||
+    (typeof anyMessage.filesize === 'number' && anyMessage.filesize) ||
+    metadataMedia?.size ||
+    metadataMedia?.filesize ||
+    inlineMedia?.size ||
+    inlineMedia?.filesize;
+
+  const caption =
+    (typeof anyMessage.caption === 'string' && anyMessage.caption) ||
+    metadataMedia?.caption ||
+    inlineMedia?.caption;
+
+  if (!mediaUrl && !data && !mimetype && !filename) {
+    return null;
+  }
+
+  return {
+    mimetype: mimetype || 'application/octet-stream',
+    filename,
+    data,
+    url: mediaUrl || undefined,
+    size,
+    caption,
+  };
+};
+
+const classifyMediaKind = (mimetype: string, type: MessageType, filename?: string): ResolvedMediaAttachment['kind'] => {
+  if (type === 'image' || mimetype.startsWith('image/')) return 'image';
+  if (type === 'video' || mimetype.startsWith('video/')) return 'video';
+  if (type === 'audio' || type === 'voice' || mimetype.startsWith('audio/')) return 'audio';
+  if (!mimetype && filename) {
+    const guessedMime = getMimeFromFilename(filename);
+    if (guessedMime.startsWith('image/')) return 'image';
+    if (guessedMime.startsWith('video/')) return 'video';
+    if (guessedMime.startsWith('audio/')) return 'audio';
+  }
+  return 'document';
+};
+
+const formatFileSize = (size?: number) => {
+  if (!size || Number.isNaN(size)) return '';
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const resolveAttachment = (message: ChatMessageView): ResolvedMediaAttachment | null => {
+  const normalized = normalizeMessageMedia(message) || inferMediaFromBody(message.body);
+  if (!normalized) return null;
+  const src = getMediaSrc(normalized);
+
+  return {
+    kind: classifyMediaKind(normalized.mimetype, message.type, normalized.filename),
+    src,
+    filename: normalized.filename || 'attachment',
+    mimetype: normalized.mimetype,
+    size: normalized.size,
+    caption: normalized.caption,
+  };
 };
 
 const looksLikeBase64Payload = (value: string) =>
@@ -259,6 +414,7 @@ export function Chats() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState<boolean>(false);
   const [showChatInfo, setShowChatInfo] = useState<boolean>(false);
+  const [activeMediaPreview, setActiveMediaPreview] = useState<ResolvedMediaAttachment | null>(null);
   const [contactPhone, setContactPhone] = useState<string>('');
   const [loadingContactPhone, setLoadingContactPhone] = useState<boolean>(false);
   const [contactEmailInput, setContactEmailInput] = useState<string>('');
@@ -725,6 +881,8 @@ export function Chats() {
     setMessageInput(prev => prev + emoji);
     setShowEmojiPicker(false);
   };
+
+  const closeMediaPreview = () => setActiveMediaPreview(null);
 
   const handleSaveChatInfo = async () => {
     if (!activeSessionId || !activeChat || activeChat.isGroup) return;
@@ -1368,6 +1526,7 @@ export function Chats() {
 
           <main className="chats-room">
             {activeChat ? (
+              <>
               <div className="room-container">
                 <header className="room-header">
                   <div className="room-header-main">
@@ -1405,7 +1564,7 @@ export function Chats() {
                       aria-label="Toggle chat info"
                       title="Toggle chat info"
                     >
-                      <Info size={16} />
+                      <span className="room-info-btn-glyph" aria-hidden="true">i</span>
                     </button>
                   </div>
                 </header>
@@ -1431,39 +1590,76 @@ export function Chats() {
                         msg.timestamp || Math.floor(new Date(msg.createdAt).getTime() / 1000),
                       );
 
-                      const inferredMedia = !msg.metadata?.media ? inferMediaFromBody(msg.body) : null;
-                      const mediaInfo = msg.metadata?.media || inferredMedia;
-                      const isMediaMessage = msg.type !== 'text' || !!mediaInfo;
+                      const attachmentInfo = resolveAttachment(msg);
+                      const isMediaMessage = msg.type !== 'text' || !!attachmentInfo;
 
                       const renderMedia = () => {
                         if (msg.type === 'revoked') return null;
-                        if (!mediaInfo) return null;
-                        const mediaSrc = getMediaSrc(mediaInfo);
-                        if (!mediaSrc) return null;
+                        if (!attachmentInfo) return null;
 
-                        switch (msg.type) {
+                        switch (attachmentInfo.kind) {
                           case 'image':
-                          case 'sticker':
                             return (
-                              <div className="message-media-image">
-                                <img
-                                  src={mediaSrc}
-                                  alt={mediaInfo.filename || 'WhatsApp Image'}
-                                  className="chat-image-media"
-                                />
-                              </div>
+                              <button
+                                type="button"
+                                className="message-media-image"
+                                onClick={() => attachmentInfo.src && setActiveMediaPreview(attachmentInfo)}
+                              >
+                                {attachmentInfo.src ? (
+                                  <img
+                                    src={attachmentInfo.src}
+                                    alt={attachmentInfo.filename || 'WhatsApp image'}
+                                    className="chat-image-media"
+                                    loading="lazy"
+                                  />
+                                ) : (
+                                  <div className="chat-media-fallback">
+                                    <ImageIcon size={22} />
+                                    <span>Image preview unavailable</span>
+                                  </div>
+                                )}
+                                <span className="media-filename">{attachmentInfo.filename}</span>
+                              </button>
                             );
                           case 'video':
                             return (
-                              <div className="message-media-video">
-                                <video src={mediaSrc} controls className="chat-video-media" />
-                              </div>
+                              <button
+                                type="button"
+                                className="message-media-video"
+                                onClick={() => attachmentInfo.src && setActiveMediaPreview(attachmentInfo)}
+                              >
+                                {attachmentInfo.src ? (
+                                  <video src={attachmentInfo.src} className="chat-video-media" preload="metadata" />
+                                ) : (
+                                  <div className="chat-media-fallback">
+                                    <Play size={22} />
+                                    <span>Video preview unavailable</span>
+                                  </div>
+                                )}
+                                {attachmentInfo.src && (
+                                  <span className="chat-video-overlay">
+                                    <Play size={22} />
+                                  </span>
+                                )}
+                                <span className="media-filename">{attachmentInfo.filename}</span>
+                              </button>
                             );
                           case 'audio':
-                          case 'voice':
                             return (
                               <div className="message-media-audio">
-                                <audio src={mediaSrc} controls className="chat-audio-media" />
+                                <div className="chat-audio-card">
+                                  <div className="chat-audio-card-head">
+                                    <Music4 size={16} />
+                                    <span>{attachmentInfo.filename}</span>
+                                  </div>
+                                  {attachmentInfo.src ? (
+                                    <audio src={attachmentInfo.src} controls className="chat-audio-media" preload="metadata" />
+                                  ) : (
+                                    <div className="chat-media-fallback compact">
+                                      <span>Audio preview unavailable</span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             );
                           case 'document':
@@ -1471,11 +1667,31 @@ export function Chats() {
                             return (
                               <div className="message-media-document">
                                 <a
-                                  href={mediaSrc}
-                                  download={mediaInfo.filename || 'document'}
-                                  className="chat-document-media"
+                                  href={attachmentInfo.src || '#'}
+                                  download={attachmentInfo.filename || 'document'}
+                                  className={`chat-document-media ${attachmentInfo.src ? '' : 'disabled'}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  onClick={event => {
+                                    if (!attachmentInfo.src) {
+                                      event.preventDefault();
+                                    }
+                                  }}
                                 >
-                                  📎 {mediaInfo.filename || t('chats.downloadDocument')}
+                                  <span className="chat-document-icon">
+                                    {attachmentInfo.mimetype === 'application/pdf' ? <FileText size={18} /> : <ImageIcon size={18} />}
+                                  </span>
+                                  <span className="chat-document-copy">
+                                    <strong>{attachmentInfo.filename || t('chats.downloadDocument')}</strong>
+                                    <span>
+                                      {[attachmentInfo.mimetype.split('/').pop()?.toUpperCase(), formatFileSize(attachmentInfo.size)]
+                                        .filter(Boolean)
+                                        .join(' - ') || 'Open attachment'}
+                                    </span>
+                                  </span>
+                                  <span className="chat-document-action">
+                                    <Download size={16} />
+                                  </span>
                                 </a>
                               </div>
                             );
@@ -1509,10 +1725,9 @@ export function Chats() {
                               {isRevoked ? (
                                 <div className="message-text">{t('chats.messageDeleted')}</div>
                               ) : (
-                                msg.body &&
-                                !inferredMedia &&
-                                (!mediaInfo || msg.body !== mediaInfo.filename) && (
-                                  <div className="message-text">{msg.body}</div>
+                                (attachmentInfo?.caption || msg.body) &&
+                                (!attachmentInfo || (msg.body !== attachmentInfo.filename && msg.body !== attachmentInfo.src)) && (
+                                  <div className="message-text">{attachmentInfo?.caption || msg.body}</div>
                                 )
                               )}
 
@@ -1840,6 +2055,34 @@ export function Chats() {
                   )}
                 </div>
               </div>
+              {activeMediaPreview && (
+                <div className="chat-media-lightbox" role="dialog" aria-modal="true" onClick={closeMediaPreview}>
+                  <div className="chat-media-lightbox-backdrop" />
+                  <div className="chat-media-lightbox-content" onClick={event => event.stopPropagation()}>
+                    <button
+                      type="button"
+                      className="chat-media-lightbox-close"
+                      onClick={closeMediaPreview}
+                      aria-label="Close preview"
+                    >
+                      <X size={18} />
+                    </button>
+                    {activeMediaPreview.kind === 'image' ? (
+                      <img src={activeMediaPreview.src} alt={activeMediaPreview.filename} className="chat-media-lightbox-image" />
+                    ) : activeMediaPreview.kind === 'video' ? (
+                      <video src={activeMediaPreview.src} controls autoPlay className="chat-media-lightbox-video" />
+                    ) : null}
+                    <div className="chat-media-lightbox-meta">
+                      <strong>{activeMediaPreview.filename}</strong>
+                      <span>
+                        {[activeMediaPreview.mimetype, formatFileSize(activeMediaPreview.size)].filter(Boolean).join(' - ')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+              </>
+
             ) : (
               <div className="chats-room-placeholder">
                 <div className="chats-room-placeholder-orb">
