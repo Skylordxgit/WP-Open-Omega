@@ -452,6 +452,45 @@
   padding: 0;
 }
 
+/* Non-blocking notice when one selected channel's chat fetch failed. */
+.chats-channel-warning {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.5rem 0.75rem 0;
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  background: rgba(234, 88, 12, 0.1);
+  border: 1px solid rgba(234, 88, 12, 0.2);
+  color: #c2410c;
+  font-size: 0.76rem;
+}
+
+.chats-channel-warning svg {
+  flex-shrink: 0;
+}
+
+.chats-channel-warning span {
+  flex: 1;
+  min-width: 0;
+}
+
+.chats-channel-warning button {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: #9a3412;
+  font-weight: 700;
+  font-size: 0.76rem;
+  cursor: pointer;
+  padding: 0.1rem 0.3rem;
+  border-radius: 5px;
+}
+
+.chats-channel-warning button:hover {
+  background: rgba(234, 88, 12, 0.14);
+}
+
 .chats-list {
   flex: 1;
   min-height: 0;
@@ -924,6 +963,40 @@
 .message-bubble-wrapper.incoming + .message-bubble-wrapper.outgoing,
 .message-bubble-wrapper.outgoing + .message-bubble-wrapper.incoming {
   margin-top: 0.55rem;
+}
+
+/* "Load older messages" control pinned at the top of the scroll area. */
+.load-older-row {
+  display: flex;
+  justify-content: center;
+  padding: 0.25rem 0 0.6rem;
+  flex-shrink: 0;
+}
+
+.load-older-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-white);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  transition: all 0.15s ease;
+}
+
+.load-older-btn:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.load-older-btn:disabled {
+  opacity: 0.7;
+  cursor: progress;
 }
 
 .messages-loading {

@@ -197,8 +197,20 @@ export function Chats() {
   const [activeChat, setActiveChat] = useState<ChatWithSession | null>(null);
   const [messages, setMessages] = useState<ChatMessageView[]>([]);
   const [loadingMessages, setLoadingMessages] = useState<boolean>(false);
+  const [messagesTotal, setMessagesTotal] = useState<number>(0); // real DB count for this chat
+  const [loadingOlder, setLoadingOlder] = useState<boolean>(false); // "load older" in flight
   const [messageInput, setMessageInput] = useState<string>('');
   const [sending, setSending] = useState<boolean>(false);
+
+  // Channels whose chat fetch failed on the last load — surfaced non-blockingly in the inbox.
+  const [failedChannelIds, setFailedChannelIds] = useState<string[]>([]);
+
+  // Request-generation guards: only the newest load is allowed to commit state, so a slow/older
+  // response from a previous channel/chat selection can never overwrite a newer one.
+  const loadChatsReqRef = useRef(0);
+  const loadMessagesReqRef = useRef(0);
+  // Set before prepending older history so the bottom-auto-scroll effect skips that one update.
+  const skipNextAutoScrollRef = useRef(false);
 
   // File attachments
   const [attachment, setAttachment] = useState<{
@@ -242,28 +254,32 @@ export function Chats() {
   // 2. Fetch chats for every selected channel and merge them into one inbox
   const loadChats = useCallback(
     async (sessionIds: string[]) => {
+      const reqId = ++loadChatsReqRef.current;
       if (sessionIds.length === 0) {
         setChats([]);
+        setFailedChannelIds([]);
         return;
       }
-      try {
-        setLoadingChats(true);
-        const perChannel = await Promise.all(
-          sessionIds.map(async sessionId => {
-            try {
-              const data = await sessionApi.getChats(sessionId);
-              return data.map(chat => ({ ...chat, sessionId }));
-            } catch (err) {
-              showErrorToast(t('chats.errors.loadChats'), err instanceof Error ? err.message : undefined);
-              return [];
-            }
-          }),
-        );
-        const merged = perChannel.flat().sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-        setChats(merged);
-      } finally {
-        setLoadingChats(false);
-      }
+      setLoadingChats(true);
+      const failed: string[] = [];
+      const perChannel = await Promise.all(
+        sessionIds.map(async sessionId => {
+          try {
+            const data = await sessionApi.getChats(sessionId);
+            return data.map(chat => ({ ...chat, sessionId }));
+          } catch (err) {
+            failed.push(sessionId);
+            showErrorToast(t('chats.errors.loadChats'), err instanceof Error ? err.message : undefined);
+            return [];
+          }
+        }),
+      );
+      // A newer load started while this one was in flight — discard this (stale) result entirely.
+      if (reqId !== loadChatsReqRef.current) return;
+      const merged = perChannel.flat().sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      setChats(merged);
+      setFailedChannelIds(failed);
+      setLoadingChats(false);
     },
     [t, showErrorToast],
   );
@@ -429,20 +445,58 @@ export function Chats() {
   const loadMessages = useCallback(
     async (sessionId: string, chatId: string) => {
       if (!sessionId || !chatId) return;
+      const reqId = ++loadMessagesReqRef.current;
+      setLoadingMessages(true);
+      markChatRead(sessionId, chatId);
       try {
-        setLoadingMessages(true);
-        markChatRead(sessionId, chatId);
         const data = await sessionApi.getChatMessages(sessionId, chatId, 100);
+        if (reqId !== loadMessagesReqRef.current) return; // chat switched mid-flight — discard
         setMessages([...data.messages].reverse());
+        setMessagesTotal(typeof data.total === 'number' ? data.total : data.messages.length);
       } catch (err) {
+        if (reqId !== loadMessagesReqRef.current) return;
         showErrorToast(t('chats.errors.loadMessages'), err instanceof Error ? err.message : undefined);
         setMessages([]);
+        setMessagesTotal(0);
       } finally {
-        setLoadingMessages(false);
+        if (reqId === loadMessagesReqRef.current) setLoadingMessages(false);
       }
     },
     [markChatRead, t, showErrorToast],
   );
+
+  // Append the next older page of history (uses the backend's existing offset paging). Older
+  // messages are prepended and de-duplicated, preserving chronological order.
+  const loadOlderMessages = useCallback(async () => {
+    if (!activeChat || loadingOlder || loadingMessages) return;
+    if (messages.length >= messagesTotal) return;
+    const reqId = loadMessagesReqRef.current; // tie this page to the current chat's load generation
+    const { sessionId, id: chatId } = activeChat;
+    const currentCount = messages.length;
+    setLoadingOlder(true);
+    try {
+      const data = await sessionApi.getChatMessages(sessionId, chatId, 100, currentCount);
+      if (reqId !== loadMessagesReqRef.current) return; // chat switched — discard
+      if (data.messages.length === 0) {
+        // Reached the end of stored history — stop offering "load older".
+        setMessagesTotal(currentCount);
+        return;
+      }
+      const older = [...data.messages].reverse(); // oldest-first
+      skipNextAutoScrollRef.current = true; // don't yank the view to the bottom when prepending
+      setMessages(prev => {
+        const seen = new Set(prev.map(m => m.waMessageId || m.id));
+        const deduped = older.filter(m => !seen.has(m.waMessageId || m.id));
+        if (deduped.length === 0) return prev;
+        return [...deduped, ...prev];
+      });
+      setMessagesTotal(typeof data.total === 'number' ? data.total : messagesTotal);
+    } catch (err) {
+      showErrorToast(t('chats.errors.loadMessages'), err instanceof Error ? err.message : undefined);
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [activeChat, messages.length, messagesTotal, loadingOlder, loadingMessages, t, showErrorToast]);
 
   const handleReactMessage = async (msg: ChatMessageView, emoji: string) => {
     if (!activeChat) return;
@@ -524,6 +578,7 @@ export function Chats() {
       );
     } else {
       setMessages([]);
+      setMessagesTotal(0);
     }
   }, [activeChat, loadMessages]);
 
@@ -549,8 +604,13 @@ export function Chats() {
     });
   };
 
-  // 5. Scroll chat to bottom
+  // 5. Scroll chat to bottom — skipped once right after prepending older history, so loading
+  // older messages doesn't jump the user back down to the latest message.
   useEffect(() => {
+    if (skipNextAutoScrollRef.current) {
+      skipNextAutoScrollRef.current = false;
+      return;
+    }
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
@@ -976,6 +1036,24 @@ export function Chats() {
               </button>
             </div>
 
+            {/* Non-blocking notice: a selected channel failed to load — the rest still show. */}
+            {failedChannelIds.length > 0 && (
+              <div className="chats-channel-warning" role="status">
+                <AlertCircle size={14} />
+                <span>
+                  {t('chats.channelLoadFailed', {
+                    defaultValue: "Couldn't load {{names}}. Showing the other channels.",
+                    names: failedChannelIds
+                      .map(fid => sessions.find(s => s.id === fid)?.name || fid)
+                      .join(', '),
+                  })}
+                </span>
+                <button type="button" onClick={() => void loadChats(selectedChannelIds)}>
+                  {t('common.refresh')}
+                </button>
+              </div>
+            )}
+
             <div className="chats-list">
               {loadingChats ? (
                 <div className="chats-list-loading">
@@ -989,10 +1067,12 @@ export function Chats() {
                 </div>
               ) : (
                 filteredChats.map(chat => {
-                  const isActive = activeChat?.id === chat.id;
+                  // Identity is per-channel: the same contact/group can exist on multiple WhatsApp
+                  // accounts, so both the key and the active check combine sessionId + chat.id.
+                  const isActive = activeChat?.id === chat.id && activeChat?.sessionId === chat.sessionId;
                   return (
                     <div
-                      key={chat.id}
+                      key={`${chat.sessionId}:${chat.id}`}
                       className={`chat-item-card ${isActive ? 'active' : ''} ${
                         (chat.unreadCount || 0) > 0 ? 'has-unread' : ''
                       }`}
@@ -1047,7 +1127,11 @@ export function Chats() {
                       <span>{activeChat.id}</span>
                       <div className="room-contact-meta">
                         <span>{activeChat.isGroup ? 'Shared workspace' : '1:1 conversation'}</span>
-                        <span>{activeChatMessageCount} messages loaded</span>
+                        <span>
+                          {messagesTotal > activeChatMessageCount
+                            ? `${activeChatMessageCount} / ${messagesTotal} loaded`
+                            : `${activeChatMessageCount} loaded`}
+                        </span>
                         <span>{activeChatUnread} unread</span>
                       </div>
                     </div>
@@ -1071,6 +1155,25 @@ export function Chats() {
                 </header>
 
                 <div className="room-messages">
+                  {!loadingMessages && messages.length > 0 && messages.length < messagesTotal && (
+                    <div className="load-older-row">
+                      <button
+                        type="button"
+                        className="load-older-btn"
+                        onClick={() => void loadOlderMessages()}
+                        disabled={loadingOlder}
+                      >
+                        {loadingOlder ? (
+                          <>
+                            <Loader2 className="animate-spin" size={14} />
+                            {t('chats.loadingMessages')}
+                          </>
+                        ) : (
+                          t('chats.loadOlder', { defaultValue: 'Load older messages' })
+                        )}
+                      </button>
+                    </div>
+                  )}
                   {loadingMessages ? (
                     <div className="messages-loading">
                       <Loader2 className="animate-spin" size={32} />
