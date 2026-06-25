@@ -824,29 +824,50 @@
   flex-shrink: 0;
 }
 
-/* Header actions — flat, borderless icon buttons (search / info / more). */
+/* Header actions — 40px circular glass icon buttons (search / info / more, plus disabled call/video).
+   Icons are forced to full-strength currentColor so they always read clearly over the translucent
+   glass header in both themes — never as empty/low-contrast circles. */
 .room-action-btn {
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  border: none;
-  background: transparent;
-  color: var(--chat-text-secondary);
+  border-radius: 999px;
+  color: var(--chat-text);
+  background: var(--chat-panel-strong);
+  border: 1px solid var(--chat-border);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  backdrop-filter: blur(18px) saturate(160%);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
 
-.room-action-btn:hover {
-  background: var(--chat-button-hover);
-  color: var(--chat-text);
+/* Size via the lucide `size` prop (attribute sizing), not CSS width/height: a CSS width on an SVG
+   flex-child with a viewBox collapses to 0 in Chromium, which is what hid these icons. flex-shrink:0
+   guards against any further flex collapse; stroke/opacity keep the icon at full strength. */
+.room-action-btn svg {
+  flex-shrink: 0;
+  stroke: currentColor;
+  opacity: 1;
+}
+
+[data-theme='dark'] .room-action-btn {
+  color: #eaf4ff;
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.room-action-btn:hover:not(:disabled) {
+  color: var(--chat-accent);
+  border-color: var(--chat-accent);
+  transform: translateY(-1px);
 }
 
 .room-action-btn.active {
   background: var(--chat-accent-soft);
+  border-color: var(--chat-accent);
   color: var(--chat-accent);
 }
 
@@ -855,14 +876,15 @@
   outline-offset: 2px;
 }
 
+/* Disabled call/video buttons: clearly dimmed-but-intentional, never empty/broken — the icon stays
+   visible (full opacity is only knocked down a little, on top of the button's own reduced opacity). */
 .room-action-btn:disabled {
   cursor: not-allowed;
-  opacity: 0.35;
+  opacity: 0.45;
 }
 
-.room-action-btn:disabled:hover {
-  background: transparent;
-  color: var(--chat-text-secondary);
+.room-action-btn:disabled svg {
+  opacity: 0.7;
 }
 
 .room-contact-info {

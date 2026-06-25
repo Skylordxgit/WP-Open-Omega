@@ -45,7 +45,7 @@ export const ConversationHeader = memo(function ConversationHeader({
           title="Voice calls — coming soon"
           aria-label="Voice call (coming soon)"
         >
-          <Phone size={18} />
+          <Phone size={20} />
         </button>
         <button
           type="button"
@@ -54,7 +54,7 @@ export const ConversationHeader = memo(function ConversationHeader({
           title="Video calls — coming soon"
           aria-label="Video call (coming soon)"
         >
-          <Video size={18} />
+          <Video size={20} />
         </button>
         <button
           type="button"
@@ -63,7 +63,7 @@ export const ConversationHeader = memo(function ConversationHeader({
           aria-label="Search conversation"
           onClick={onSearchClick}
         >
-          <Search size={18} />
+          <Search size={20} />
         </button>
         <button
           type="button"
@@ -73,7 +73,7 @@ export const ConversationHeader = memo(function ConversationHeader({
           aria-expanded={showInfo}
           onClick={onToggleInfo}
         >
-          <Info size={18} />
+          <Info size={20} />
         </button>
         <button
           type="button"
@@ -82,7 +82,7 @@ export const ConversationHeader = memo(function ConversationHeader({
           aria-label="More options"
           onClick={onMoreClick}
         >
-          <MoreVertical size={18} />
+          <MoreVertical size={20} />
         </button>
       </div>
     </header>
