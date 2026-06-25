@@ -1,33 +1,94 @@
 import { memo } from 'react';
-import { Loader2, Download, FileText, Mic } from 'lucide-react';
-import type { ChatMessageView, MediaDownloadStatus } from './types';
+import { Loader2, Download, FileText, Mic, Image as ImageIcon, Film, Music } from 'lucide-react';
+import type { ChatMessageView, MediaDownloadStatus, MessageMedia } from './types';
 import {
   getMediaSrc,
   getFileExtension,
+  formatBytes,
+  formatDuration,
   MEDIA_AVAILABLE_LABELS,
-  QuotedMediaIcon,
 } from './helpers';
 
-// Placeholder card for a media message whose payload hasn't been downloaded yet. Shows the typed
-// "… available" label plus a Download/Retry button with a loading and error state. Presentational
-// only — the actual fetch is owned by the parent so it can update message state + cache.
+// Icon for the placeholder tile, sized for the card (larger than the inline quote icon).
+function PlaceholderIcon({ type }: { type: string }) {
+  switch (type) {
+    case 'image':
+    case 'sticker':
+      return <ImageIcon size={18} />;
+    case 'video':
+      return <Film size={18} />;
+    case 'voice':
+      return <Mic size={18} />;
+    case 'audio':
+      return <Music size={18} />;
+    case 'document':
+    default:
+      return <FileText size={18} />;
+  }
+}
+
+// A small static waveform shown on voice-note placeholders. Purely decorative (no real samples).
+const VOICE_BARS = [6, 11, 16, 9, 14, 7, 12, 5, 10, 15, 8, 13];
+function VoiceWaveform() {
+  return (
+    <span className="media-waveform" aria-hidden="true">
+      {VOICE_BARS.map((h, i) => (
+        <span key={i} style={{ height: `${h}px` }} />
+      ))}
+    </span>
+  );
+}
+
+// Placeholder card for a media message whose bytes haven't been downloaded yet (inbound media is
+// never auto-downloaded). Renders a WhatsApp-style typed card — image/video/audio show the kind +
+// size, voice shows a mic + waveform + duration, documents show the filename + extension badge +
+// size, stickers render as a transparent tile — plus a Download/Retry button with loading + error
+// states. Presentational only — the actual fetch is owned by the parent (updates state + caches).
 export const MediaDownloadPlaceholder = memo(function MediaDownloadPlaceholder({
   type,
+  media,
   status,
   onDownload,
 }: {
   type: string;
+  media?: MessageMedia;
   status: MediaDownloadStatus | 'idle';
   onDownload: () => void;
 }) {
   const label = MEDIA_AVAILABLE_LABELS[type] || 'Media available';
+  const isVoice = type === 'voice';
+  const isDocument = type === 'document';
+  const isSticker = type === 'sticker';
+  const ext = isDocument ? getFileExtension(media?.filename) : '';
+  const sizeText = formatBytes(media?.size);
+  const durationText = formatDuration(media?.duration);
+
+  // Secondary line: documents show "<EXT> file · <size>"; timed media show duration; else size.
+  const metaParts: string[] = [];
+  if (isDocument) {
+    if (ext) metaParts.push(`${ext} file`);
+    if (sizeText) metaParts.push(sizeText);
+  } else if (durationText) {
+    metaParts.push(durationText);
+  } else if (sizeText) {
+    metaParts.push(sizeText);
+  }
+  const meta = metaParts.join(' · ');
+  // Documents lead with the filename; everything else leads with the typed "… available" label.
+  const primary = isDocument && media?.filename ? media.filename : label;
+
   return (
-    <div className={`message-media-placeholder downloadable ${status}`}>
+    <div
+      className={`message-media-placeholder downloadable type-${type} ${isSticker ? 'sticker' : ''} ${status}`}
+    >
       <span className="media-placeholder-icon" aria-hidden="true">
-        <QuotedMediaIcon type={type} />
+        <PlaceholderIcon type={type} />
+        {isDocument && ext && <span className="media-placeholder-ext">{ext}</span>}
       </span>
       <div className="media-placeholder-info">
-        <span className="media-placeholder-label">{label}</span>
+        <span className="media-placeholder-label">{primary}</span>
+        {isVoice && <VoiceWaveform />}
+        {meta && <span className="media-placeholder-meta">{meta}</span>}
         {status === 'error' && (
           <span className="media-placeholder-error">Couldn’t load media. Tap to retry.</span>
         )}
@@ -37,7 +98,7 @@ export const MediaDownloadPlaceholder = memo(function MediaDownloadPlaceholder({
         className="media-download-btn"
         onClick={onDownload}
         disabled={status === 'loading'}
-        aria-label={status === 'error' ? 'Retry media download' : 'Download media'}
+        aria-label={status === 'error' ? 'Retry media download' : `Download ${type}`}
       >
         {status === 'loading' ? (
           <>

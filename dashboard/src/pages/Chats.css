@@ -1576,6 +1576,7 @@
 }
 
 .message-media-placeholder.downloadable .media-placeholder-icon {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1613,6 +1614,56 @@
 
 [data-theme='dark'] .media-placeholder-error {
   color: #fca5a5;
+}
+
+/* Secondary line on a download placeholder: file size, voice/audio duration, or "<EXT> file". */
+.media-placeholder-meta {
+  font-size: 0.68rem;
+  color: var(--chat-muted);
+}
+
+/* Extension badge pinned to the document icon tile (e.g. "PDF"), mirroring the downloaded doc card. */
+.media-placeholder-ext {
+  position: absolute;
+  bottom: -3px;
+  right: -4px;
+  padding: 0 3px;
+  border-radius: 4px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 0.5rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+/* Static decorative waveform on a voice-note placeholder. */
+.media-waveform {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 18px;
+  margin: 1px 0;
+}
+
+.media-waveform span {
+  width: 2px;
+  border-radius: 2px;
+  background: var(--chat-accent);
+  opacity: 0.5;
+}
+
+/* Sticker placeholder: transparent + borderless, matching the borderless downloaded sticker. */
+.message-media-placeholder.downloadable.sticker {
+  background: transparent;
+  border: 1px dashed rgba(15, 23, 42, 0.16);
+  min-width: 160px;
+}
+
+[data-theme='dark'] .message-media-placeholder.downloadable.sticker {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.16);
 }
 
 .media-download-btn {

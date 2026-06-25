@@ -104,3 +104,37 @@ export function buildIncomingMessageBase(msg: RawMessageFields): IncomingMessage
 
   return incoming;
 }
+
+/**
+ * Raw whatsapp-web.js media fields read synchronously from a message's internal `_data`, so inbound
+ * media metadata can be surfaced WITHOUT downloading the bytes. Field names mirror the wwebjs raw
+ * payload; all optional/defensive across library versions (wwebjs serializes `duration` as a string).
+ */
+export interface WwebjsMediaRawData {
+  mimetype?: string;
+  filename?: string;
+  size?: number;
+  duration?: string | number;
+}
+
+/**
+ * Build lightweight media metadata (mimetype/filename/size/duration — never the bytes) for an inbound
+ * media message, from the wwebjs raw `_data`. Inbound media is deliberately NOT downloaded on receipt:
+ * doing so would block the real-time emit and defeat the dashboard's click-to-download UX. The UI
+ * renders a typed placeholder from this metadata and fetches the payload on demand. Always returns at
+ * least `{ mimetype }` so callers can flag the message as carrying media.
+ */
+export function extractWwebjsMediaMeta(rawData?: WwebjsMediaRawData): NonNullable<IncomingMessage['media']> {
+  const media: NonNullable<IncomingMessage['media']> = { mimetype: rawData?.mimetype ?? '' };
+  if (rawData?.filename) {
+    media.filename = rawData.filename;
+  }
+  if (typeof rawData?.size === 'number' && rawData.size > 0) {
+    media.size = rawData.size;
+  }
+  const duration = rawData?.duration != null ? Number(rawData.duration) : NaN;
+  if (Number.isFinite(duration) && duration > 0) {
+    media.duration = duration;
+  }
+  return media;
+}

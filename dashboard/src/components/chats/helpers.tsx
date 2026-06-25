@@ -47,6 +47,18 @@ export const estimateBase64Bytes = (base64?: string): number => {
   return Math.floor((base64.length * 3) / 4);
 };
 
+// Human-readable clock duration (e.g. "0:07", "1:23", "1:02:05") for voice/audio/video media cards.
+// Presentation only.
+export const formatDuration = (seconds?: number): string => {
+  if (!seconds || seconds <= 0 || !Number.isFinite(seconds)) return '';
+  const total = Math.round(seconds);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const mm = h > 0 ? String(m).padStart(2, '0') : String(m);
+  return `${h > 0 ? `${h}:` : ''}${mm}:${String(s).padStart(2, '0')}`;
+};
+
 // If a quoted preview body is a bare media marker like "[image]", return the media kind so the UI
 // can show an icon + readable label instead of literal brackets. Uses only the existing body.
 export const getQuotedMediaType = (body?: string): string | null => {

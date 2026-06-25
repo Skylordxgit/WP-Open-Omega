@@ -1,4 +1,9 @@
-import { buildIncomingMessageBase, mapWwebjsMessageType, RawMessageFields } from './message-mapper';
+import {
+  buildIncomingMessageBase,
+  extractWwebjsMediaMeta,
+  mapWwebjsMessageType,
+  RawMessageFields,
+} from './message-mapper';
 
 describe('buildIncomingMessageBase', () => {
   const base: RawMessageFields = {
@@ -100,5 +105,36 @@ describe('mapWwebjsMessageType (engine type-token -> neutral MessageType boundar
     ['e2e_notification', 'unknown'], // any unmapped wwebjs type
   ])('maps wwebjs type %s -> %s', (raw, expected) => {
     expect(mapWwebjsMessageType(raw)).toBe(expected);
+  });
+});
+
+describe('extractWwebjsMediaMeta (lightweight inbound media metadata — never the bytes)', () => {
+  it('extracts mimetype, filename, size and duration from the raw _data', () => {
+    const meta = extractWwebjsMediaMeta({
+      mimetype: 'audio/ogg; codecs=opus',
+      filename: 'voice.ogg',
+      size: 5120,
+      duration: '7', // wwebjs serializes duration as a string
+    });
+    expect(meta).toEqual({
+      mimetype: 'audio/ogg; codecs=opus',
+      filename: 'voice.ogg',
+      size: 5120,
+      duration: 7,
+    });
+  });
+
+  it('never carries downloaded bytes — there is no `data` field', () => {
+    const meta = extractWwebjsMediaMeta({ mimetype: 'image/jpeg', size: 9000 }) as { data?: string };
+    expect(meta.data).toBeUndefined();
+  });
+
+  it('defaults mimetype to an empty string and omits absent/invalid optional fields', () => {
+    expect(extractWwebjsMediaMeta(undefined)).toEqual({ mimetype: '' });
+    expect(extractWwebjsMediaMeta({})).toEqual({ mimetype: '' });
+    // Zero/negative/non-numeric size and duration are dropped, not surfaced as bogus values.
+    expect(extractWwebjsMediaMeta({ mimetype: 'image/png', size: 0, duration: 'NaN' })).toEqual({
+      mimetype: 'image/png',
+    });
   });
 });

@@ -50,7 +50,7 @@ interface IncomingWsMessage {
   type: string;
   timestamp: number;
   fromMe?: boolean;
-  media?: { mimetype: string; filename?: string; data?: string };
+  media?: { mimetype: string; filename?: string; data?: string; size?: number; duration?: number };
   quotedMessage?: { id: string; body: string };
   metadata?: ChatMessageView['metadata'];
 }

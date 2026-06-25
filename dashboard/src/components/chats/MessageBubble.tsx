@@ -105,7 +105,12 @@ export const MessageBubble = memo(function MessageBubble({
                 <>
                   {renderedMedia}
                   {needsMediaDownload && (
-                    <MediaDownloadPlaceholder type={msg.type} status={mediaDownloadStatus} onDownload={onDownloadMedia} />
+                    <MediaDownloadPlaceholder
+                      type={msg.type}
+                      media={mediaInfo}
+                      status={mediaDownloadStatus}
+                      onDownload={onDownloadMedia}
+                    />
                   )}
                   {hasTextBody && <div className="message-text">{renderTextWithLinks(msg.body)}</div>}
                 </>

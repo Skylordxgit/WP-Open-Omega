@@ -44,6 +44,24 @@ import { BaileysSessionStore } from './baileys-session-store';
 /** Linked-device identity shown in WhatsApp (Settings → Linked Devices). */
 const BAILEYS_BROWSER: [string, string, string] = ['OpenWA', 'Chrome', '120.0.0'];
 
+/**
+ * Coerce a Baileys numeric field (number | Long | numeric string | null) to a finite number, or null.
+ * Baileys serializes byte counts/durations as `Long` objects, which would otherwise stringify oddly.
+ */
+function toFiniteNumber(value: unknown): number | null {
+  if (value == null) return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'string') {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  if (typeof value === 'object' && typeof (value as { toNumber?: unknown }).toNumber === 'function') {
+    const n = (value as { toNumber: () => number }).toNumber();
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
 /** Fully silent logger so Baileys does not spam stdout; diagnostics flow via connection.update. */
 function createSilentLogger(): BaileysLogger {
   const noop = (): void => {};
@@ -767,6 +785,11 @@ export class BaileysAdapter implements IWhatsAppEngine {
     }
 
     // --- media (image / video / audio / document / sticker) ---
+    // Attach lightweight metadata ONLY; never auto-download the bytes here. Downloading inside the
+    // inbound handler would block the real-time `message.received` emit until the (potentially large)
+    // file finished, and defeat the dashboard's click-to-download UX. Baileys exposes
+    // mimetype/filename/size/duration on the message content synchronously, so a typed placeholder
+    // can render instantly; the bytes are fetched on demand via downloadMessageMedia().
     let media: IncomingMessage['media'];
     const isMediaType =
       contentType === 'imageMessage' ||
@@ -776,33 +799,29 @@ export class BaileysAdapter implements IWhatsAppEngine {
       contentType === 'documentWithCaptionMessage' ||
       contentType === 'stickerMessage';
     if (isMediaType) {
-      try {
-        const buf = await b.downloadMediaMessage(
-          msg,
-          'buffer',
-          {},
-          {
-            logger: createSilentLogger(),
-            reuploadRequest: this.sock!.updateMediaMessage,
-          },
-        );
-        // normalizeMessageContent unwraps documentWithCaptionMessage / viewOnceMessage /
-        // ephemeralMessage wrappers so we always reach the inner media sub-message.
-        const normalizedContent = b.normalizeMessageContent(content) ?? content;
-        const subMessage =
-          normalizedContent.imageMessage ??
-          normalizedContent.videoMessage ??
-          normalizedContent.audioMessage ??
-          normalizedContent.documentMessage ??
-          normalizedContent.stickerMessage;
-        const mimetype = subMessage?.mimetype ?? '';
-        const filename = normalizedContent.documentMessage?.fileName ?? undefined;
-        media = { mimetype, data: buf.toString('base64'), filename };
-      } catch (err) {
-        this.logger.debug('Failed to download inbound media; emitting message without media', {
-          error: err instanceof Error ? err.message : String(err),
-          msgId: msg.key.id,
-        });
+      // normalizeMessageContent unwraps documentWithCaptionMessage / viewOnceMessage /
+      // ephemeralMessage wrappers so we always reach the inner media sub-message.
+      const normalizedContent = b.normalizeMessageContent(content) ?? content;
+      const subMessage =
+        normalizedContent.imageMessage ??
+        normalizedContent.videoMessage ??
+        normalizedContent.audioMessage ??
+        normalizedContent.documentMessage ??
+        normalizedContent.stickerMessage;
+      media = { mimetype: subMessage?.mimetype ?? '' };
+      const filename = normalizedContent.documentMessage?.fileName ?? undefined;
+      if (filename) {
+        media.filename = filename;
+      }
+      const size = toFiniteNumber((subMessage as { fileLength?: unknown } | undefined)?.fileLength);
+      if (size != null && size > 0) {
+        media.size = size;
+      }
+      const seconds = toFiniteNumber(
+        normalizedContent.audioMessage?.seconds ?? normalizedContent.videoMessage?.seconds,
+      );
+      if (seconds != null && seconds > 0) {
+        media.duration = seconds;
       }
     }
 

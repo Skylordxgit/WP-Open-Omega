@@ -44,7 +44,7 @@ import {
   WwjsChannelData,
   GroupCreateResult,
 } from '../types/whatsapp-web-js.types';
-import { buildIncomingMessageBase } from './message-mapper';
+import { buildIncomingMessageBase, extractWwebjsMediaMeta, type WwebjsMediaRawData } from './message-mapper';
 
 /** Default cap on a server-side media download: 50 MiB (overridable via MEDIA_DOWNLOAD_MAX_BYTES). */
 const DEFAULT_MEDIA_MAX_BYTES = 50 * 1024 * 1024;
@@ -283,20 +283,14 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
           };
         }
 
-        // Handle media
+        // Handle media — attach lightweight metadata ONLY; never auto-download the bytes here.
+        // Downloading inside this event handler would block the real-time `message.received` emit
+        // until the (potentially large) file finished, and defeat the dashboard's click-to-download
+        // UX. The bytes are fetched on demand via downloadMessageMedia(). Metadata comes from the
+        // raw wwebjs `_data`, which carries mimetype/filename/size/duration without a download.
         if (msg.hasMedia) {
-          try {
-            const media = await msg.downloadMedia();
-            if (media) {
-              incomingMessage.media = {
-                mimetype: media.mimetype,
-                filename: media.filename || undefined,
-                data: media.data,
-              };
-            }
-          } catch (error) {
-            this.logger.error('Error downloading media', String(error));
-          }
+          const rawData = (msg as unknown as { _data?: WwebjsMediaRawData })._data;
+          incomingMessage.media = extractWwebjsMediaMeta(rawData);
         }
 
         // Handle quoted message

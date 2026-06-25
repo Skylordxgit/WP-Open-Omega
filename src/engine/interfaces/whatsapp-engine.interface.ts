@@ -91,7 +91,17 @@ export interface IncomingMessage {
   media?: {
     mimetype: string;
     filename?: string;
-    data?: string; // base64
+    /**
+     * base64 media bytes. INTENTIONALLY ABSENT on live incoming messages: inbound media is NOT
+     * auto-downloaded (it would block the real-time emit and defeat click-to-download). The
+     * dashboard renders a typed placeholder from the metadata below and fetches `data` on demand
+     * via {@link IWhatsAppEngine.downloadMessageMedia}.
+     */
+    data?: string;
+    /** File size in bytes, when the engine exposes it without downloading. Placeholder display only. */
+    size?: number;
+    /** Duration in seconds for audio/voice/video, when available. Placeholder display only. */
+    duration?: number;
   };
   quotedMessage?: {
     id: string;

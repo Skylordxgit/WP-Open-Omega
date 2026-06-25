@@ -540,15 +540,13 @@ describe('BaileysAdapter inbound fan-out', () => {
     expect(onMessageAck).toHaveBeenCalledWith('OUT1', 'delivered');
   });
 
-  it('inbound image: downloads media and exposes base64 + caption as body', async () => {
+  it('inbound image: exposes lightweight media metadata + caption WITHOUT auto-downloading bytes', async () => {
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
     const baileys = jest.requireMock('@whiskeysockets/baileys') as {
       getContentType: jest.Mock;
       downloadMediaMessage: jest.Mock;
     };
     baileys.getContentType.mockReturnValue('imageMessage');
-    const imgBuf = Buffer.from('PNGBYTES');
-    baileys.downloadMediaMessage.mockResolvedValue(imgBuf);
 
     const onMessage = jest.fn();
     const adapter = newAdapter();
@@ -558,7 +556,7 @@ describe('BaileysAdapter inbound fan-out', () => {
       messages: [
         {
           key: { remoteJid: '628111@s.whatsapp.net', fromMe: false, id: 'IMG1' },
-          message: { imageMessage: { mimetype: 'image/png', caption: 'look at this' } },
+          message: { imageMessage: { mimetype: 'image/png', caption: 'look at this', fileLength: 2048 } },
           messageTimestamp: 1700000020,
         },
       ],
@@ -570,14 +568,18 @@ describe('BaileysAdapter inbound fan-out', () => {
       id: string;
       body: string;
       type: string;
-      media: { mimetype: string; data: string };
+      media: { mimetype: string; data?: string; size?: number };
     };
     expect(msg.type).toBe('image');
     expect(msg.body).toBe('look at this');
-    expect(msg.media).toEqual({ mimetype: 'image/png', data: imgBuf.toString('base64') });
+    expect(msg.media.mimetype).toBe('image/png');
+    expect(msg.media.size).toBe(2048);
+    // Click-to-download: inbound media must NOT be auto-downloaded (no bytes, no download call).
+    expect(msg.media.data).toBeUndefined();
+    expect(baileys.downloadMediaMessage).not.toHaveBeenCalled();
   });
 
-  it('inbound documentWithCaption: normalizeMessageContent unwraps wrapper, yields non-empty mimetype', async () => {
+  it('inbound documentWithCaption: normalizeMessageContent unwraps wrapper, yields mimetype + filename (no download)', async () => {
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
     const baileys = jest.requireMock('@whiskeysockets/baileys') as {
       getContentType: jest.Mock;
@@ -585,11 +587,9 @@ describe('BaileysAdapter inbound fan-out', () => {
       normalizeMessageContent: jest.Mock;
     };
     baileys.getContentType.mockReturnValue('documentWithCaptionMessage');
-    const docBuf = Buffer.from('PDFBYTES');
-    baileys.downloadMediaMessage.mockResolvedValue(docBuf);
     // Simulate normalizeMessageContent unwrapping: returns the inner documentMessage.
     baileys.normalizeMessageContent.mockReturnValue({
-      documentMessage: { mimetype: 'application/pdf', fileName: 'report.pdf', caption: 'Q1 report' },
+      documentMessage: { mimetype: 'application/pdf', fileName: 'report.pdf', caption: 'Q1 report', fileLength: 4096 },
     });
 
     const onMessage = jest.fn();
@@ -616,12 +616,15 @@ describe('BaileysAdapter inbound fan-out', () => {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     const msg = onMessage.mock.calls[0][0] as {
       type: string;
-      media: { mimetype: string; filename?: string; data: string };
+      media: { mimetype: string; filename?: string; data?: string; size?: number };
     };
     expect(msg.type).toBe('document');
     expect(msg.media.mimetype).toBe('application/pdf');
     expect(msg.media.filename).toBe('report.pdf');
-    expect(msg.media.data).toBe(docBuf.toString('base64'));
+    expect(msg.media.size).toBe(4096);
+    // Click-to-download: inbound media must NOT be auto-downloaded.
+    expect(msg.media.data).toBeUndefined();
+    expect(baileys.downloadMediaMessage).not.toHaveBeenCalled();
   });
 
   it('inbound location: populates the location field with coordinates', async () => {
@@ -784,14 +787,17 @@ describe('BaileysAdapter inbound fan-out', () => {
     expect(event.senderId).toBe('628111@s.whatsapp.net');
   });
 
-  it('media download failure: logs the error and emits the message without media (no throw)', async () => {
+  it('inbound voice note: extracts duration as metadata and never downloads the audio bytes', async () => {
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
     const baileys = jest.requireMock('@whiskeysockets/baileys') as {
       getContentType: jest.Mock;
       downloadMediaMessage: jest.Mock;
+      normalizeMessageContent: jest.Mock;
     };
-    baileys.getContentType.mockReturnValue('imageMessage');
-    baileys.downloadMediaMessage.mockRejectedValue(new Error('download failed'));
+    baileys.getContentType.mockReturnValue('audioMessage');
+    // Pin normalizeMessageContent (a prior test may have left an impl; clearAllMocks keeps it).
+    const audioContent = { audioMessage: { mimetype: 'audio/ogg; codecs=opus', ptt: true, seconds: 7, fileLength: 5120 } };
+    baileys.normalizeMessageContent.mockReturnValue(audioContent);
 
     const onMessage = jest.fn();
     const adapter = newAdapter();
@@ -800,18 +806,25 @@ describe('BaileysAdapter inbound fan-out', () => {
       type: 'notify',
       messages: [
         {
-          key: { remoteJid: '628111@s.whatsapp.net', fromMe: false, id: 'IMGFAIL' },
-          message: { imageMessage: { mimetype: 'image/jpeg', caption: 'broken' } },
+          key: { remoteJid: '628111@s.whatsapp.net', fromMe: false, id: 'PTT1' },
+          message: { audioMessage: { mimetype: 'audio/ogg; codecs=opus', ptt: true, seconds: 7, fileLength: 5120 } },
           messageTimestamp: 1700000025,
         },
       ],
     });
     await new Promise(r => setImmediate(r));
-    // message is still emitted, just without media
     expect(onMessage).toHaveBeenCalledTimes(1);
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    const msg = onMessage.mock.calls[0][0] as { media?: unknown };
-    expect(msg.media).toBeUndefined();
+    const msg = onMessage.mock.calls[0][0] as {
+      type: string;
+      media: { mimetype: string; duration?: number; size?: number; data?: string };
+    };
+    // `audioMessage` maps to the neutral 'voice' or 'audio' type; either way it carries no bytes.
+    expect(msg.media.duration).toBe(7);
+    expect(msg.media.size).toBe(5120);
+    expect(msg.media.data).toBeUndefined();
+    // The core real-time guarantee: inbound media is emitted without ever blocking on a download.
+    expect(baileys.downloadMediaMessage).not.toHaveBeenCalled();
   });
 });
 

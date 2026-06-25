@@ -578,9 +578,17 @@ export class MessageService {
       });
       if (row) {
         const existingMeta = (row.metadata as Record<string, unknown>) ?? {};
+        // Merge over any lightweight metadata captured at receive time (size/duration/filename) so the
+        // downloaded bytes augment — rather than replace — what the placeholder already showed.
+        const existingMedia = (existingMeta.media as Record<string, unknown> | undefined) ?? {};
         row.metadata = {
           ...existingMeta,
-          media: { mimetype: media.mimetype, filename: media.filename, data: media.data },
+          media: {
+            ...existingMedia,
+            mimetype: media.mimetype,
+            filename: media.filename ?? (existingMedia.filename as string | undefined),
+            data: media.data,
+          },
         };
         await this.messageRepository.save(row);
       }
