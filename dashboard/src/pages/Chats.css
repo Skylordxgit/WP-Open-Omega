@@ -855,6 +855,16 @@
   outline-offset: 2px;
 }
 
+.room-action-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.room-action-btn:disabled:hover {
+  background: transparent;
+  color: var(--chat-text-secondary);
+}
+
 .room-contact-info {
   min-width: 0;
 }

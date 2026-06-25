@@ -40,17 +40,19 @@ export const ConversationHeader = memo(function ConversationHeader({
       <div className="room-header-actions">
         <button
           type="button"
+          disabled
           className="room-action-btn"
-          title="Voice call"
-          aria-label="Voice call"
+          title="Voice calls — coming soon"
+          aria-label="Voice call (coming soon)"
         >
           <Phone size={18} />
         </button>
         <button
           type="button"
+          disabled
           className="room-action-btn"
-          title="Video call"
-          aria-label="Video call"
+          title="Video calls — coming soon"
+          aria-label="Video call (coming soon)"
         >
           <Video size={18} />
         </button>
