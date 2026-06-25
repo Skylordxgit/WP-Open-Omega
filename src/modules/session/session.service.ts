@@ -960,7 +960,7 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
     sessionId: string,
     incoming: IncomingMessage,
     opts: { claimPendingOutgoing?: boolean } = {},
-  ): Promise<void> {
+  ): Promise<'inserted' | 'adopted' | 'duplicate'> {
     const direction = incoming.fromMe ? MessageDirection.OUTGOING : MessageDirection.INCOMING;
 
     // 1. Already stored under this WhatsApp id — never duplicate.
@@ -969,7 +969,7 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
         where: { sessionId, waMessageId: incoming.id },
       });
       if (existing) {
-        return;
+        return 'duplicate';
       }
     }
 
@@ -997,7 +997,7 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
           pending.metadata = meta;
         }
         await this.messageRepository.save(pending);
-        return;
+        return 'adopted';
       }
     }
 
@@ -1017,6 +1017,7 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
       metadata: this.buildMessageMetadata(incoming),
     });
     await this.messageRepository.save(row);
+    return 'inserted';
   }
 
   /**
@@ -1057,8 +1058,18 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
       });
       return;
     }
+    // Stage 1 evidence: how many chats the engine exposed, and whether the cap truncated them.
+    this.logger.log(`History backfill: engine returned ${chats.length} chat(s) for ${sessionId}`, {
+      sessionId,
+      engineChats: chats.length,
+      maxChats,
+      cappedByMaxChats: chats.length > maxChats,
+      action: 'history_backfill_chats',
+    });
 
-    let imported = 0;
+    let engineReturnedTotal = 0;
+    let inserted = 0;
+    let duplicates = 0;
     let chatsWithHistory = 0;
     for (const chat of chats.slice(0, maxChats)) {
       try {
@@ -1066,13 +1077,30 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
         if (history.length > 0) {
           chatsWithHistory += 1;
         }
+        engineReturnedTotal += history.length;
+        let chatInserted = 0;
+        let chatDup = 0;
         for (const message of history) {
           if (message.isStatusBroadcast) {
             continue;
           }
-          await this.upsertObservedMessage(sessionId, message);
-          imported += 1;
+          const outcome = await this.upsertObservedMessage(sessionId, message);
+          if (outcome === 'duplicate') chatDup += 1;
+          else chatInserted += 1;
         }
+        inserted += chatInserted;
+        duplicates += chatDup;
+        // Stage 2+4 evidence per chat: what the engine returned vs what we newly persisted. A
+        // returned count at the perChat cap means the engine likely has more it isn't exposing here.
+        this.logger.debug(`History backfill chat ${chat.id}`, {
+          sessionId,
+          chatId: chat.id,
+          engineReturned: history.length,
+          inserted: chatInserted,
+          duplicates: chatDup,
+          hitPerChatCap: history.length >= perChat,
+          action: 'history_backfill_chat',
+        });
       } catch (error) {
         // Per-chat failures are expected and non-fatal (e.g. Baileys getChatHistory is unsupported).
         this.logger.debug(`History backfill: skipped chat ${chat.id}`, {
@@ -1085,7 +1113,10 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
       sessionId,
       chatsScanned: Math.min(chats.length, maxChats),
       chatsWithHistory,
-      messagesImported: imported,
+      engineReturnedMessages: engineReturnedTotal,
+      messagesInserted: inserted,
+      duplicatesSkipped: duplicates,
+      perChat,
       action: 'history_backfill',
     });
   }

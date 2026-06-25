@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Param, Body, Query, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Get, Param, Body, Query, HttpCode, HttpStatus, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { MessageService } from './message.service';
 import { BulkMessageService } from './bulk-message.service';
@@ -45,6 +45,34 @@ export class MessageController {
       limit: limit ? parseInt(limit, 10) : undefined,
       offset: offset ? parseInt(offset, 10) : undefined,
     });
+  }
+
+  @Get('history-diagnostics')
+  @RequireRole(ApiKeyRole.OPERATOR)
+  @ApiOperation({
+    summary: 'Diagnose where a chat loses history',
+    description:
+      'Reports the message count at each pipeline stage (live engine, database, message API) for one ' +
+      'chat, so missing older history can be traced to its exact stage. Read-only.',
+  })
+  @ApiParam({ name: 'sessionId', description: 'Session ID' })
+  @ApiQuery({ name: 'chatId', required: true, description: 'Chat ID to diagnose (e.g. 123@c.us)' })
+  @ApiQuery({ name: 'engineLimit', required: false, type: Number, description: 'Messages to request from the engine (default 1000)' })
+  @ApiResponse({ status: 200, description: 'Per-stage history counts' })
+  async diagnoseHistory(
+    @Param('sessionId') sessionId: string,
+    @Query('chatId') chatId?: string,
+    @Query('engineLimit') engineLimit?: string,
+  ) {
+    if (!chatId) {
+      throw new BadRequestException('chatId query parameter is required');
+    }
+    const parsed = engineLimit ? parseInt(engineLimit, 10) : undefined;
+    return this.messageService.diagnoseChatHistory(
+      sessionId,
+      chatId,
+      parsed !== undefined && !Number.isNaN(parsed) ? parsed : undefined,
+    );
   }
 
   @Post('send-text')

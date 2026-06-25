@@ -548,6 +548,86 @@ export class MessageService {
   }
 
   /**
+   * History-loss diagnostics for a single chat: returns the message count at each pipeline stage so
+   * an operator can pinpoint where older messages disappear, with evidence rather than assumption.
+   *
+   *  - engine.chatsReturned        : how many chats the live engine exposes (stage 1)
+   *  - engine.chatHistoryReturned  : how many messages the live engine exposes for THIS chat (stage 2);
+   *                                  `hitEngineLimit` true means the engine likely has more it won't
+   *                                  return in one call (a genuine engine limitation, not our bug)
+   *  - database.messagesForChat    : how many we have persisted for this chat (stage 4)
+   *  - api.firstPageReturned/total : what the dashboard's message API serves (stage 6)
+   *
+   * The engine block is only populated when the session is connected; in an environment that cannot
+   * reach WhatsApp it reports `ready:false` + the reason, which is itself the honest answer for stages
+   * 1–2 there. Read-only: it never writes or backfills.
+   */
+  async diagnoseChatHistory(sessionId: string, chatId: string, engineLimit = 1000) {
+    const safeEngineLimit = Number.isFinite(engineLimit)
+      ? Math.min(Math.max(Math.trunc(engineLimit), 1), 5000)
+      : 1000;
+    const diagnostics: {
+      sessionId: string;
+      chatId: string;
+      engine: {
+        ready: boolean;
+        chatsReturned?: number;
+        chatHistoryReturned?: number;
+        hitEngineLimit?: boolean;
+        engineLimitUsed: number;
+        error?: string;
+      };
+      database: { messagesForChat: number; oldestTimestamp: number | null; newestTimestamp: number | null };
+      api: { firstPageReturned: number; total: number };
+    } = {
+      sessionId,
+      chatId,
+      engine: { ready: false, engineLimitUsed: safeEngineLimit },
+      database: { messagesForChat: 0, oldestTimestamp: null, newestTimestamp: null },
+      api: { firstPageReturned: 0, total: 0 },
+    };
+
+    // Stage 1 & 2 — live engine (only when connected).
+    try {
+      const engine = this.getEngine(sessionId);
+      diagnostics.engine.ready = true;
+      try {
+        diagnostics.engine.chatsReturned = (await engine.getChats()).length;
+      } catch (err) {
+        diagnostics.engine.error = `getChats: ${err instanceof Error ? err.message : String(err)}`;
+      }
+      try {
+        const history = await engine.getChatHistory(chatId, safeEngineLimit, false);
+        diagnostics.engine.chatHistoryReturned = history.length;
+        diagnostics.engine.hitEngineLimit = history.length >= safeEngineLimit;
+      } catch (err) {
+        const msg = `getChatHistory: ${err instanceof Error ? err.message : String(err)}`;
+        diagnostics.engine.error = diagnostics.engine.error ? `${diagnostics.engine.error}; ${msg}` : msg;
+      }
+    } catch (err) {
+      diagnostics.engine.error = err instanceof Error ? err.message : String(err);
+    }
+
+    // Stage 4 — database (what we persisted for this chat).
+    diagnostics.database.messagesForChat = await this.messageRepository.count({ where: { sessionId, chatId } });
+    const bounds = await this.messageRepository
+      .createQueryBuilder('m')
+      .select('MIN(m.timestamp)', 'min')
+      .addSelect('MAX(m.timestamp)', 'max')
+      .where('m.sessionId = :sessionId', { sessionId })
+      .andWhere('m.chatId = :chatId', { chatId })
+      .getRawOne<{ min: string | number | null; max: string | number | null }>();
+    diagnostics.database.oldestTimestamp = bounds?.min != null ? Number(bounds.min) : null;
+    diagnostics.database.newestTimestamp = bounds?.max != null ? Number(bounds.max) : null;
+
+    // Stage 6 — API (the dashboard's first page for this chat).
+    const apiPage = await this.getMessages(sessionId, { chatId, limit: 100, offset: 0 });
+    diagnostics.api = { firstPageReturned: apiPage.messages.length, total: apiPage.total };
+
+    return diagnostics;
+  }
+
+  /**
    * Download the media for a single stored message on demand (never bulk). Used by the dashboard's
    * "Download" / "Load media" action so historical media is fetched only when the user asks for it.
    *
