@@ -31,6 +31,7 @@ export const ConversationHeader = memo(function ConversationHeader({
           <h3>{chat.name || chat.id.split('@')[0]}</h3>
           <div className="room-contact-meta">
             <span className={statusOk ? 'meta-ok' : 'meta-warn'}>{statusLabel}</span>
+            <span>{chat.isGroup ? 'Group' : 'Direct'}</span>
           </div>
         </div>
       </div>

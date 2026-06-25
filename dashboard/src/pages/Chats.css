@@ -14,9 +14,9 @@
   --chat-accent: #2563eb;
 
   /* Liquid-glass tuning knobs — shared by both themes so the treatment stays consistent. */
-  --chat-glass-blur: 20px;
-  --chat-glass-saturate: 150%;
-  --chat-glass-bg: rgba(255, 255, 255, 0.62);
+  --chat-glass-blur: 24px;
+  --chat-glass-saturate: 180%;
+  --chat-glass-bg: rgba(255, 255, 255, 0.72);
   --chat-glass-border: rgba(255, 255, 255, 0.55);
   --chat-glass-highlight: rgba(255, 255, 255, 0.85);
   --chat-radius-sm: 8px;
@@ -473,7 +473,7 @@
   overflow-x: hidden;
   display: flex;
   flex-direction: column;
-  padding: 0.3rem;
+  padding: 0;
   overscroll-behavior: contain;
 }
 
@@ -520,54 +520,50 @@
 .chat-item-card {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
-  min-height: 68px;
-  padding: 0.55rem 0.6rem;
-  border: 1px solid var(--chat-border);
+  gap: 0.8rem;
+  min-height: 72px;
+  padding: 0.6rem 0.85rem;
+  border: none;
+  border-bottom: 1px solid var(--chat-border);
   border-left: 3px solid transparent;
-  border-radius: 9px;
+  border-radius: 0;
   cursor: pointer;
-  transition: 0.15s ease;
+  transition: background 0.13s ease;
   user-select: none;
-  margin-bottom: 0.05rem;
-  background: var(--chat-panel);
+  background: transparent;
 }
 
 .chat-item-card:hover {
   background: var(--chat-button-hover);
-  border-color: rgba(37, 99, 235, 0.2);
 }
 
 .chat-item-card.active {
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.14), rgba(34, 197, 94, 0.08));
-  border-color: rgba(37, 99, 235, 0.22);
+  background: var(--chat-selected);
   border-left-color: var(--chat-accent);
 }
 
 .chat-avatar {
-  width: 38px;
-  height: 38px;
-  border-radius: 11px;
-  background: linear-gradient(135deg, #eff6ff, #f0fdf4);
-  border: 1px solid var(--chat-border);
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #dbeafe, #dcfce7);
+  border: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #334155;
+  color: #475569;
   flex-shrink: 0;
 }
 
 .chat-item-card.active .chat-avatar {
-  background: #fff;
   color: #2563eb;
-  border-color: rgba(37, 99, 235, 0.2);
 }
 
 .chat-item-info {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
+  gap: 0.22rem;
   min-width: 0; /* Ensures text truncation works */
 }
 
@@ -579,7 +575,7 @@
 }
 
 .chat-item-name {
-  font-size: 0.78rem;
+  font-size: 0.95rem;
   font-weight: 600;
   color: var(--chat-text);
   white-space: nowrap;
@@ -588,7 +584,7 @@
 }
 
 .chat-item-time {
-  font-size: 0.62rem;
+  font-size: 0.72rem;
   color: var(--chat-muted);
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
@@ -613,8 +609,8 @@
 }
 
 .chat-item-snippet {
-  font-size: 0.7rem;
-  color: var(--chat-text-secondary);
+  font-size: 0.83rem;
+  color: var(--chat-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -674,10 +670,15 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  background: var(--chat-bg);
+  /* WhatsApp Desktop warm wallpaper tone in light mode. */
+  background: #efeae2;
   min-height: 0;
   overflow: hidden;
   position: relative; /* positioning context for the Chat Info drawer */
+}
+
+[data-theme='dark'] .chats-room {
+  background: #0b141a;
 }
 
 .chats-room-placeholder {
@@ -762,9 +763,9 @@
 .room-header {
   background: var(--chat-panel);
   border-bottom: 1px solid var(--chat-border);
-  padding: 0.32rem 0.65rem;
-  min-height: 40px;
-  max-height: 46px;
+  padding: 0.5rem 1rem;
+  min-height: 56px;
+  max-height: 56px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -842,25 +843,30 @@
 }
 
 .room-avatar {
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  background: var(--chat-button);
-  border: 1px solid var(--chat-border);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #dbeafe, #dcfce7);
+  border: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--chat-text-secondary);
+  color: #475569;
   flex-shrink: 0;
+}
+
+[data-theme='dark'] .room-avatar {
+  background: rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
 }
 
 /* Primary: the chat name dominates the header. */
 .room-contact-info h3 {
-  font-size: 0.86rem;
-  font-weight: 700;
+  font-size: 1rem;
+  font-weight: 600;
   color: var(--chat-text);
   margin: 0;
-  line-height: 1.2;
+  line-height: 1.25;
 }
 
 .room-contact-info > span {
@@ -906,17 +912,28 @@
 .room-messages {
   flex: 1;
   min-height: 0;
-  padding: 0.7rem 1rem 1.2rem;
+  padding: 0.85rem 5% 1.2rem;
   overflow-y: auto;
   overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  /* Very subtle texture — barely-there dots, not a visible grid. */
-  background-image: radial-gradient(rgba(148, 163, 184, 0.1) 1px, transparent 0);
-  background-size: 26px 26px;
+  /* WhatsApp-style faint doodle wash — soft, warm, barely-there. */
+  background-color: #efeae2;
+  background-image:
+    radial-gradient(rgba(15, 23, 42, 0.035) 1px, transparent 0),
+    radial-gradient(rgba(15, 23, 42, 0.025) 1px, transparent 0);
+  background-size: 22px 22px, 44px 44px;
+  background-position: 0 0, 11px 11px;
   overscroll-behavior: contain;
   scroll-padding-bottom: 1.25rem;
+}
+
+[data-theme='dark'] .room-messages {
+  background-color: #0b141a;
+  background-image:
+    radial-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 0),
+    radial-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 0);
 }
 
 /* Add breathing room only when the sender flips, so a run from one side stays tight and
@@ -1004,28 +1021,32 @@
 
 .message-bubble {
   max-width: 100%;
-  padding: 0.4rem 0.55rem 0.25rem;
-  border-radius: 9px;
-  font-size: 0.8rem;
-  line-height: 1.4;
+  padding: 0.5rem 0.7rem 0.4rem;
+  border-radius: 18px;
+  font-size: 0.9rem;
+  line-height: 1.45;
   position: relative;
-  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 1.5px rgba(11, 20, 26, 0.13);
 }
 
 .message-bubble.incoming {
-  background: var(--chat-panel-strong);
-  color: var(--chat-text);
-  border-bottom-left-radius: 2px;
-  border: 1px solid var(--chat-border);
+  background: #ffffff;
+  color: #111b21;
+  border-top-left-radius: 6px;
 }
 
 .message-bubble.outgoing {
   background: #d9fdd3; /* Soft WhatsApp Green */
   color: #111b21;
-  border-bottom-right-radius: 2px;
+  border-top-right-radius: 6px;
 }
 
-/* Dark theme outgoing chat bubble override */
+/* Dark theme bubbles — WhatsApp Desktop dark palette. */
+[data-theme='dark'] .message-bubble.incoming {
+  background: #202c33;
+  color: #e9edef;
+}
+
 [data-theme='dark'] .message-bubble.outgoing {
   background: #005c4b; /* Dark WhatsApp Green */
   color: #e9edef;
@@ -1070,12 +1091,34 @@
   color: var(--chat-muted);
 }
 
+/* On the green outgoing bubble, the meta reads as WhatsApp's muted green-grey, not slate. */
+.message-bubble.outgoing .message-time {
+  color: rgba(11, 20, 26, 0.45);
+}
+
+[data-theme='dark'] .message-bubble.outgoing .message-time {
+  color: rgba(233, 237, 239, 0.6);
+}
+
+[data-theme='dark'] .message-bubble.incoming .message-time {
+  color: rgba(233, 237, 239, 0.5);
+}
+
 .chats-page .message-status-icon {
   font-size: 0.75rem;
+  color: rgba(11, 20, 26, 0.45);
+}
+
+[data-theme='dark'] .chats-page .message-status-icon {
+  color: rgba(233, 237, 239, 0.6);
 }
 
 .chats-page .message-status-icon.read {
   color: #53bdeb; /* WhatsApp blue checks */
+}
+
+[data-theme='dark'] .chats-page .message-status-icon.read {
+  color: #53bdeb;
 }
 
 /* =============================================================================
@@ -1084,24 +1127,24 @@
 .room-input-footer {
   background: var(--chat-panel);
   border-top: 1px solid var(--chat-border);
-  padding: 0.35rem 0.65rem;
+  padding: 0.5rem 0.85rem;
   box-sizing: border-box;
   flex-shrink: 0;
 }
 
 .chats-page .input-form {
   display: flex;
-  gap: 0.4rem;
+  gap: 0.5rem;
   align-items: center;
 }
 
 .message-text-input {
   flex: 1;
   min-width: 0; /* dominant + never pushes the buttons into overflow */
-  padding: 0.35rem 0.65rem;
-  border: 1px solid var(--chat-border);
-  border-radius: 8px;
-  font-size: 0.78rem;
+  padding: 0.6rem 1rem;
+  border: 1px solid transparent;
+  border-radius: 22px;
+  font-size: 0.9rem;
   background: var(--chat-input);
   color: var(--chat-text);
   outline: none;
@@ -1123,11 +1166,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  background: var(--chat-accent);
+  width: 44px;
+  height: 44px;
+  background: #25d366; /* WhatsApp send green */
   border: none;
-  border-radius: 7px;
+  border-radius: 50%;
   color: white;
   cursor: pointer;
   transition: background 0.2s, transform 0.1s;
@@ -1135,7 +1178,7 @@
 }
 
 .btn-send-message:hover:not(:disabled) {
-  background: var(--chat-accent);
+  background: #1faa52;
   transform: scale(1.05);
 }
 
@@ -1204,12 +1247,14 @@
    ATTACHMENT PREVIEW & EMOJI PICKER
    ============================================================================= */
 .btn-input-accessory {
-  background: var(--chat-button);
-  border: 1px solid var(--chat-border);
-  color: var(--chat-text-secondary);
+  background: transparent;
+  border: none;
+  color: var(--chat-muted);
   cursor: pointer;
-  padding: 0.4rem;
-  border-radius: 8px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2001,25 +2046,31 @@
   margin-left: 2px;
 }
 
-/* Quoted Box inside Bubble */
+/* Quoted Box inside Bubble — compact WhatsApp reply card: rounded, full-width fill, accent bar. */
 .message-quote-box {
-  background: rgba(0, 0, 0, 0.04);
-  border-left: 4px solid var(--chat-accent);
-  border-radius: 4px;
-  padding: 0.375rem 0.625rem;
-  margin-bottom: 0.5rem;
-  font-size: 0.8125rem;
+  background: rgba(0, 0, 0, 0.05);
+  border-left: 3px solid var(--chat-accent);
+  border-radius: 6px;
+  padding: 0.3rem 0.5rem;
+  margin-bottom: 0.35rem;
+  font-size: 0.8rem;
+  line-height: 1.3;
   color: var(--chat-text-secondary);
   cursor: pointer;
+  overflow: hidden;
 }
 
 .message-bubble.outgoing .message-quote-box {
-  background: rgba(0, 0, 0, 0.05);
-  border-left-color: #008069;
+  background: rgba(0, 0, 0, 0.06);
+  border-left-color: #06cf9c;
 }
 
 [data-theme='dark'] .message-quote-box {
   background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme='dark'] .message-bubble.outgoing .message-quote-box {
+  background: rgba(0, 0, 0, 0.18);
 }
 
 .chats-page .quote-body {
@@ -2393,8 +2444,8 @@
 [data-theme='dark'] .chat-info-panel,
 [data-theme='dark'] .chats-channel-menu {
   background: rgba(15, 23, 42, 0.55);
-  -webkit-backdrop-filter: blur(22px) saturate(160%);
-  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
   border-color: rgba(255, 255, 255, 0.1);
 }
 
