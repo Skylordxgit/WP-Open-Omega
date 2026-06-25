@@ -307,6 +307,33 @@ export class MessageController {
     return this.messageService.getMessageReactions(sessionId, chatId, messageId);
   }
 
+  @Get(':chatId/:messageId/media')
+  @ApiOperation({
+    summary: 'Download media for a single message on demand',
+    description:
+      'Downloads the media for exactly one message (image/video/audio/voice/document/sticker) and ' +
+      'returns it as base64. Never bulk-downloads. The result is cached on the message row so a ' +
+      'later reload does not re-fetch it. Used by the dashboard "Load media" action.',
+  })
+  @ApiParam({ name: 'sessionId', description: 'Session ID' })
+  @ApiParam({ name: 'chatId', description: 'Chat ID containing the message' })
+  @ApiParam({ name: 'messageId', description: 'Message ID whose media to download' })
+  @ApiResponse({
+    status: 200,
+    description: 'Base64 media payload (mimetype, data, filename)',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Session not active, message not found, or no media available',
+  })
+  async getMessageMedia(
+    @Param('sessionId') sessionId: string,
+    @Param('chatId') chatId: string,
+    @Param('messageId') messageId: string,
+  ): Promise<{ mimetype: string; data: string; filename?: string }> {
+    return this.messageService.downloadMessageMedia(sessionId, chatId, messageId);
+  }
+
   // ========== Delete Message ==========
 
   @Post('delete')

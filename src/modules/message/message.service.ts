@@ -542,6 +542,55 @@ export class MessageService {
     return engine.getChatHistory(chatId, safeLimit, includeMedia);
   }
 
+  /**
+   * Download the media for a single stored message on demand (never bulk). Used by the dashboard's
+   * "Download" / "Load media" action so historical media is fetched only when the user asks for it.
+   *
+   * The downloaded bytes are cached back into the message row's `metadata.media` so a later reload
+   * (or a second viewer) doesn't have to re-fetch from WhatsApp. Caching is best-effort — a failed
+   * persist never fails the request. Returns the base64 payload the dashboard renders directly.
+   */
+  async downloadMessageMedia(
+    sessionId: string,
+    chatId: string,
+    messageId: string,
+  ): Promise<{ mimetype: string; data: string; filename?: string }> {
+    const engine = this.getEngine(sessionId);
+
+    let media: { mimetype: string; data: string; filename?: string } | null;
+    try {
+      media = await engine.downloadMessageMedia(chatId, messageId);
+    } catch (error) {
+      throw this.toClientFacingError(error);
+    }
+
+    if (!media || !media.data) {
+      throw new BadRequestException('No media is available for this message.');
+    }
+
+    // Best-effort cache: store the downloaded media on the persisted row so it isn't re-fetched.
+    try {
+      const row = await this.messageRepository.findOne({
+        where: [
+          { sessionId, waMessageId: messageId },
+          { sessionId, id: messageId },
+        ],
+      });
+      if (row) {
+        const existingMeta = (row.metadata as Record<string, unknown>) ?? {};
+        row.metadata = {
+          ...existingMeta,
+          media: { mimetype: media.mimetype, filename: media.filename, data: media.data },
+        };
+        await this.messageRepository.save(row);
+      }
+    } catch (err) {
+      this.logger.warn(`Failed to cache downloaded media for message ${messageId}`, { error: String(err) });
+    }
+
+    return media;
+  }
+
   // ========== Delete Message ==========
 
   async deleteMessage(

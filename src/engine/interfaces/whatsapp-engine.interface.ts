@@ -22,6 +22,18 @@ export interface MediaInput {
 }
 
 /**
+ * Engine-neutral payload returned when a single message's media is downloaded on demand
+ * (see {@link IWhatsAppEngine.downloadMessageMedia}). Always base64 — never a Buffer or URL —
+ * so it can be returned to the dashboard and rendered directly.
+ */
+export interface DownloadedMedia {
+  mimetype: string;
+  /** base64-encoded media bytes (no data: prefix) */
+  data: string;
+  filename?: string;
+}
+
+/**
  * Engine-neutral message type. Each adapter maps its library's native message-type tokens
  * (e.g. whatsapp-web.js `chat`/`ptt`/`vcard`) to this vocabulary at the adapter boundary,
  * so no consumer outside the adapter sees engine-specific type strings. `unknown` covers any
@@ -396,6 +408,13 @@ export interface IWhatsAppEngine {
   // Message Operations
   deleteMessage(chatId: string, messageId: string, forEveryone?: boolean): Promise<void>;
   getChatHistory(chatId: string, limit?: number, includeMedia?: boolean): Promise<IncomingMessage[]>;
+  /**
+   * Download the media for a single, already-received message on demand (never bulk). `chatId`
+   * locates the message for engines that need chat context (whatsapp-web.js); store-backed engines
+   * may ignore it. Resolves to the base64 media payload, or null when the message carries no media.
+   * Throws when the message cannot be found or the download fails.
+   */
+  downloadMessageMedia(chatId: string, messageId: string): Promise<DownloadedMedia | null>;
 
   // Contact Extended Operations
   getProfilePicture(contactId: string): Promise<string | null>;

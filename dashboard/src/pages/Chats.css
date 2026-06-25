@@ -1468,6 +1468,105 @@
   opacity: 0.8;
 }
 
+/* Downloadable variant: a WhatsApp-style card with a typed "… available" label and a Download/Retry
+   button. On-demand only — history media is never auto-fetched. */
+.message-media-placeholder.downloadable {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-style: normal;
+  padding: 0.5rem 0.6rem;
+  margin-bottom: 0.35rem;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.05);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  min-width: 210px;
+  max-width: 100%;
+}
+
+[data-theme='dark'] .message-media-placeholder.downloadable {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.message-bubble.outgoing .message-media-placeholder.downloadable {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+.message-media-placeholder.downloadable .media-placeholder-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 9px;
+  background: rgba(37, 99, 235, 0.12);
+  color: #2563eb;
+}
+
+[data-theme='dark'] .message-media-placeholder.downloadable .media-placeholder-icon {
+  background: rgba(96, 165, 250, 0.18);
+  color: #93c5fd;
+}
+
+.media-placeholder-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.media-placeholder-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.media-placeholder-error {
+  font-size: 0.68rem;
+  color: #c2410c;
+}
+
+[data-theme='dark'] .media-placeholder-error {
+  color: #fca5a5;
+}
+
+.media-download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-shrink: 0;
+  padding: 0.32rem 0.6rem;
+  border-radius: 7px;
+  border: none;
+  background: #2563eb;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.media-download-btn:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.media-download-btn:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+.message-media-placeholder.downloadable.error .media-download-btn {
+  background: #c2410c;
+}
+
+.message-media-placeholder.downloadable.error .media-download-btn:hover:not(:disabled) {
+  background: #9a3412;
+}
+
 .chat-image-media {
   max-width: 100%;
   max-height: 280px;

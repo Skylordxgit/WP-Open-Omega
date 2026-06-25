@@ -31,6 +31,7 @@ import {
   DeliveryStatus,
   RevokedMessage,
   ReactionEvent,
+  DownloadedMedia,
 } from '../interfaces/whatsapp-engine.interface';
 import { createLogger } from '../../common/services/logger.service';
 import { EngineNotReadyError } from '../../common/errors/engine-not-ready.error';
@@ -1030,6 +1031,40 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
       results.push(out);
     }
     return results;
+  }
+
+  /**
+   * Download the media for a single, already-received message on demand. Resolves the message by
+   * its serialized id (works for arbitrarily old history via getMessageById), falling back to a
+   * recent-window scan of the chat. Returns null when the message has no media. Never bulk —
+   * exactly one message is touched per call.
+   */
+  async downloadMessageMedia(chatId: string, messageId: string): Promise<DownloadedMedia | null> {
+    this.ensureReady();
+
+    // Prefer a direct lookup by id — it isn't bounded by a fetch window, so historical media works.
+    let message = await this.client!.getMessageById(messageId).catch(() => null);
+    if (!message) {
+      const chat = await this.client!.getChatById(chatId);
+      const messages = await chat.fetchMessages({ limit: 100 });
+      message = messages.find(m => m.id._serialized === messageId || m.id.id === messageId) ?? null;
+    }
+    if (!message) {
+      throw new Error(`Message ${messageId} not found in chat ${chatId}`);
+    }
+    if (!message.hasMedia) {
+      return null;
+    }
+
+    const media = await message.downloadMedia();
+    if (!media || !media.data) {
+      return null;
+    }
+    return {
+      mimetype: media.mimetype,
+      data: media.data,
+      filename: media.filename || undefined,
+    };
   }
 
   // Delete Message

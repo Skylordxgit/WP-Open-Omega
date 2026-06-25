@@ -12,6 +12,7 @@ import {
   Catalog,
   Contact,
   ContactCard,
+  DownloadedMedia,
   EngineEventCallbacks,
   EngineStatus,
   Group,
@@ -913,6 +914,46 @@ export class BaileysAdapter implements IWhatsAppEngine {
       );
     }
     return { id: sent?.key?.id ?? '', timestamp: this.toUnixSeconds(sent?.messageTimestamp) };
+  }
+
+  /**
+   * Download the media for a single, previously-seen message on demand (never bulk). Resolves the
+   * message from the local store (so historical media works), then decrypts/downloads exactly that
+   * message's media. `chatId` is unused here — the store key is the message id. Returns null when the
+   * message carries no downloadable media.
+   */
+  async downloadMessageMedia(_chatId: string, messageId: string): Promise<DownloadedMedia | null> {
+    this.ensureReady();
+    const msg = await this.requireStored(messageId);
+    const b = await this.loadLib();
+
+    const content = msg.message;
+    if (!content) {
+      return null;
+    }
+    const normalizedContent = b.normalizeMessageContent(content) ?? content;
+    const subMessage =
+      normalizedContent.imageMessage ??
+      normalizedContent.videoMessage ??
+      normalizedContent.audioMessage ??
+      normalizedContent.documentMessage ??
+      normalizedContent.stickerMessage;
+    if (!subMessage) {
+      return null; // not a media message
+    }
+
+    const buf = await b.downloadMediaMessage(
+      msg,
+      'buffer',
+      {},
+      {
+        logger: createSilentLogger(),
+        reuploadRequest: this.sock!.updateMediaMessage,
+      },
+    );
+    const mimetype = subMessage.mimetype ?? 'application/octet-stream';
+    const filename = normalizedContent.documentMessage?.fileName ?? undefined;
+    return { mimetype, data: (buf as Buffer).toString('base64'), filename };
   }
 
   /** Resolve a previously-seen message from the store, or throw a clear not-found error. */

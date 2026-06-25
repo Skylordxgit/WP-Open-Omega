@@ -420,6 +420,13 @@ export const sessionApi = {
     request<{ messages: ChatMessage[]; total: number }>(
       `/sessions/${id}/messages?chatId=${encodeURIComponent(chatId)}&limit=${limit}&offset=${offset}`,
     ),
+  // On-demand media download for a single message (never bulk). Returns base64 the UI renders
+  // directly. The backend caches the result on the message row, so a later reload won't re-fetch.
+  downloadMessageMedia: (id: string, chatId: string, messageId: string) =>
+    request<{ mimetype: string; data: string; filename?: string }>(
+      `/sessions/${id}/messages/${encodeURIComponent(chatId)}/${encodeURIComponent(messageId)}/media`,
+      { timeoutMs: 60000 },
+    ),
 };
 
 // =============================================================================

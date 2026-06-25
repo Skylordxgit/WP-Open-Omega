@@ -24,6 +24,7 @@ import {
   FileText,
   Film,
   Music,
+  Download,
   Image as ImageIcon,
 } from 'lucide-react';
 import {
@@ -169,6 +170,70 @@ const QUOTE_MEDIA_LABELS: Record<string, string> = {
   sticker: 'Sticker',
 };
 
+// Message types whose bytes can be downloaded on demand. History media is NOT auto-downloaded;
+// these rows render a placeholder + "Download" action and only fetch when the user clicks.
+const DOWNLOADABLE_MEDIA_TYPES = new Set<string>(['image', 'video', 'audio', 'voice', 'document', 'sticker']);
+
+// WhatsApp-style "<kind> available" labels shown on the not-yet-downloaded media placeholder.
+const MEDIA_AVAILABLE_LABELS: Record<string, string> = {
+  image: 'Image available',
+  video: 'Video available',
+  audio: 'Audio available',
+  voice: 'Voice message available',
+  document: 'Document available',
+  sticker: 'Sticker available',
+};
+
+// Per-message media download status, keyed by message id (absent = idle/not started).
+type MediaDownloadStatus = 'loading' | 'error';
+
+// Placeholder card for a media message whose payload hasn't been downloaded yet. Shows the typed
+// "… available" label plus a Download/Retry button with a loading and error state. Presentational
+// only — the actual fetch is owned by the parent so it can update message state + cache.
+const MediaDownloadPlaceholder = ({
+  type,
+  status,
+  onDownload,
+}: {
+  type: string;
+  status: MediaDownloadStatus | 'idle';
+  onDownload: () => void;
+}) => {
+  const label = MEDIA_AVAILABLE_LABELS[type] || 'Media available';
+  return (
+    <div className={`message-media-placeholder downloadable ${status}`}>
+      <span className="media-placeholder-icon" aria-hidden="true">
+        <QuotedMediaIcon type={type} />
+      </span>
+      <div className="media-placeholder-info">
+        <span className="media-placeholder-label">{label}</span>
+        {status === 'error' && (
+          <span className="media-placeholder-error">Couldn’t load media. Tap to retry.</span>
+        )}
+      </div>
+      <button
+        type="button"
+        className="media-download-btn"
+        onClick={onDownload}
+        disabled={status === 'loading'}
+        aria-label={status === 'error' ? 'Retry media download' : 'Download media'}
+      >
+        {status === 'loading' ? (
+          <>
+            <Loader2 className="animate-spin" size={14} />
+            <span>Loading…</span>
+          </>
+        ) : (
+          <>
+            <Download size={14} />
+            <span>{status === 'error' ? 'Retry' : 'Download'}</span>
+          </>
+        )}
+      </button>
+    </div>
+  );
+};
+
 export function Chats() {
   const { t } = useTranslation();
   useDocumentTitle(t('nav.chats'));
@@ -206,6 +271,9 @@ export function Chats() {
   const [reachedOldest, setReachedOldest] = useState<boolean>(false);
   const [messageInput, setMessageInput] = useState<string>('');
   const [sending, setSending] = useState<boolean>(false);
+  // Per-message media download status (on-demand "Load media"). Keyed by message id; an absent
+  // entry means idle. History media is never auto-downloaded — only fetched on user click.
+  const [mediaDownloads, setMediaDownloads] = useState<Record<string, MediaDownloadStatus>>({});
 
   // Channels whose chat fetch failed on the last load — surfaced non-blockingly in the inbox.
   const [failedChannelIds, setFailedChannelIds] = useState<string[]>([]);
@@ -559,6 +627,47 @@ export function Chats() {
       setLoadingOlder(false);
     }
   }, [activeChat, loadedPersistedCount, loadingOlder, loadingMessages, reachedOldest, t, showErrorToast]);
+
+  // Download the media for a single message on demand and merge it into ONLY that message's state.
+  // Never touches other rows, and suppresses the next auto-scroll so loading media doesn't yank the
+  // view — keeping the scroll position stable while the user browses history.
+  const handleDownloadMedia = useCallback(
+    async (msg: ChatMessageView) => {
+      if (!activeChat) return;
+      const key = msg.id;
+      const remoteId = msg.waMessageId || msg.id;
+      setMediaDownloads(prev => ({ ...prev, [key]: 'loading' }));
+      try {
+        const media = await sessionApi.downloadMessageMedia(activeChat.sessionId, activeChat.id, remoteId);
+        skipNextAutoScrollRef.current = true; // inserting media must not scroll the reader away
+        setMessages(prev =>
+          prev.map(m => {
+            if (m.id !== msg.id) return m;
+            const metadata = m.metadata || {};
+            return {
+              ...m,
+              metadata: {
+                ...metadata,
+                media: { mimetype: media.mimetype, filename: media.filename, data: media.data },
+              },
+            };
+          }),
+        );
+        setMediaDownloads(prev => {
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
+      } catch (err) {
+        setMediaDownloads(prev => ({ ...prev, [key]: 'error' }));
+        showErrorToast(
+          t('chats.errors.loadMedia', { defaultValue: 'Failed to load media' }),
+          err instanceof Error ? err.message : undefined,
+        );
+      }
+    },
+    [activeChat, showErrorToast, t],
+  );
 
   const handleReactMessage = async (msg: ChatMessageView, emoji: string) => {
     if (!activeChat) return;
@@ -1368,25 +1477,37 @@ export function Chats() {
                               )}
 
                               {(() => {
-                                const renderedMedia = renderMedia();
-                                const hasTextBody =
-                                  !!msg.body && (!mediaInfo || msg.body !== mediaInfo.filename);
-
                                 if (isRevoked) {
                                   return <div className="message-text">{t('chats.messageDeleted')}</div>;
                                 }
-                                if (renderedMedia || hasTextBody) {
+
+                                const renderedMedia = renderMedia();
+                                const hasTextBody =
+                                  !!msg.body && (!mediaInfo || msg.body !== mediaInfo.filename);
+                                // A downloadable media type whose bytes aren't loaded yet: show the
+                                // WhatsApp-style placeholder + Download action. Never auto-download.
+                                const needsMediaDownload =
+                                  !renderedMedia && DOWNLOADABLE_MEDIA_TYPES.has(msg.type);
+
+                                if (renderedMedia || needsMediaDownload || hasTextBody) {
                                   return (
                                     <>
                                       {renderedMedia}
+                                      {needsMediaDownload && (
+                                        <MediaDownloadPlaceholder
+                                          type={msg.type}
+                                          status={mediaDownloads[msg.id] ?? 'idle'}
+                                          onDownload={() => void handleDownloadMedia(msg)}
+                                        />
+                                      )}
                                       {hasTextBody && (
                                         <div className="message-text">{renderTextWithLinks(msg.body)}</div>
                                       )}
                                     </>
                                   );
                                 }
-                                // Known media type whose payload isn't available yet (not downloaded):
-                                // show a friendly typed placeholder instead of "unsupported".
+                                // A non-text type with no renderable media and no body (e.g. an empty
+                                // location/contact/unknown): still show its kind, never "unsupported".
                                 if (isMediaMessage) {
                                   const label =
                                     QUOTE_MEDIA_LABELS[msg.type] ||
