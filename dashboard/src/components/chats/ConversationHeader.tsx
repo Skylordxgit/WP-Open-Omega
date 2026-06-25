@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Users, User, Search, Info, MoreVertical } from 'lucide-react';
+import { Users, User, Search, Info, MoreVertical, Phone, Video } from 'lucide-react';
 import type { ChatWithSession } from './types';
 
 interface ConversationHeaderProps {
@@ -26,7 +26,9 @@ export const ConversationHeader = memo(function ConversationHeader({
   return (
     <header className="room-header">
       <div className="room-header-main">
-        <div className="room-avatar">{chat.isGroup ? <Users size={20} /> : <User size={20} />}</div>
+        <div className={`room-avatar ${statusOk ? 'online' : ''}`}>
+          {chat.isGroup ? <Users size={21} /> : <User size={21} />}
+        </div>
         <div className="room-contact-info">
           <h3>{chat.name || chat.id.split('@')[0]}</h3>
           <div className="room-contact-meta">
@@ -36,6 +38,22 @@ export const ConversationHeader = memo(function ConversationHeader({
         </div>
       </div>
       <div className="room-header-actions">
+        <button
+          type="button"
+          className="room-action-btn"
+          title="Voice call"
+          aria-label="Voice call"
+        >
+          <Phone size={18} />
+        </button>
+        <button
+          type="button"
+          className="room-action-btn"
+          title="Video call"
+          aria-label="Video call"
+        >
+          <Video size={18} />
+        </button>
         <button
           type="button"
           className="room-action-btn"

@@ -54,9 +54,6 @@ export const ChatRow = memo(function ChatRow({
             {snippet ? highlightMatch(snippet, searchQuery) : <span className="no-message">{noMessageLabel}</span>}
           </span>
           <div className="chat-item-badges">
-            <span className={`chat-type-badge ${chat.isGroup ? 'group' : 'direct'}`}>
-              {chat.isGroup ? 'Group' : 'Direct'}
-            </span>
             {chat.unreadCount > 0 && <span className="chat-unread-badge">{chat.unreadCount}</span>}
           </div>
         </div>

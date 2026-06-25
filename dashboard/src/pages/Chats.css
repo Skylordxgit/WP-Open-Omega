@@ -1,27 +1,39 @@
 .chats-page {
-  /* Light theme tokens (default) */
-  --chat-bg: #f6f8fb;
-  --chat-panel: rgba(255, 255, 255, 0.86);
-  --chat-panel-strong: rgba(255, 255, 255, 0.98);
-  --chat-text: #0f172a;
-  --chat-text-secondary: #475569;
-  --chat-muted: #64748b;
-  --chat-border: rgba(15, 23, 42, 0.12);
-  --chat-input: rgba(255, 255, 255, 0.92);
-  --chat-button: rgba(15, 23, 42, 0.04);
-  --chat-button-hover: rgba(15, 23, 42, 0.08);
-  --chat-selected: rgba(37, 99, 235, 0.12);
-  --chat-accent: #2563eb;
+  /* Light theme tokens (default) — WhatsApp/iMessage ink + WhatsApp teal accent, NOT admin blue. */
+  --chat-bg: #e7ecf3;
+  --chat-panel: rgba(255, 255, 255, 0.68);
+  --chat-panel-strong: rgba(255, 255, 255, 0.9);
+  --chat-text: #111b21;
+  --chat-text-secondary: #54656f;
+  --chat-muted: #8696a0;
+  --chat-border: rgba(11, 31, 38, 0.1);
+  --chat-input: rgba(255, 255, 255, 0.55);
+  --chat-button: rgba(11, 31, 38, 0.045);
+  --chat-button-hover: rgba(11, 31, 38, 0.08);
+  --chat-selected: rgba(0, 128, 105, 0.1);
+  --chat-accent: #008069; /* WhatsApp teal-green */
+  --chat-accent-strong: #00a884;
+  --chat-accent-soft: rgba(0, 168, 132, 0.14);
 
-  /* Liquid-glass tuning knobs — shared by both themes so the treatment stays consistent. */
-  --chat-glass-blur: 24px;
-  --chat-glass-saturate: 180%;
-  --chat-glass-bg: rgba(255, 255, 255, 0.72);
-  --chat-glass-border: rgba(255, 255, 255, 0.55);
-  --chat-glass-highlight: rgba(255, 255, 255, 0.85);
+  /* Real Liquid-glass tuning knobs — translucent gradient fill, hairline glass border, a bright
+     specular top-edge, and a soft floating shadow. Shared by both themes for consistency. */
+  --chat-glass-blur: 30px;
+  --chat-glass-saturate: 190%;
+  --chat-glass-fill: linear-gradient(155deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.52));
+  --chat-glass-border: rgba(255, 255, 255, 0.6);
+  --chat-glass-highlight: rgba(255, 255, 255, 0.9);
+  --chat-glass-shadow: 0 12px 40px rgba(11, 31, 38, 0.1);
   --chat-radius-sm: 8px;
   --chat-radius-md: 12px;
   --chat-radius-lg: 18px;
+
+  /* Atmospheric backdrop so the glass panels have rich color to refract — this is what makes
+     Liquid Glass read as glass rather than flat translucency. */
+  --chat-atmosphere:
+    radial-gradient(1200px 700px at 12% -8%, rgba(0, 168, 132, 0.22), transparent 60%),
+    radial-gradient(1000px 800px at 108% 8%, rgba(59, 130, 246, 0.18), transparent 58%),
+    radial-gradient(900px 900px at 70% 112%, rgba(168, 85, 247, 0.16), transparent 60%),
+    linear-gradient(180deg, #eef2f8, #dfe6ef);
 
   padding: 0;
   width: 100%;
@@ -30,27 +42,37 @@
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  background: var(--chat-bg);
+  background: var(--chat-atmosphere);
+  background-attachment: fixed;
   overflow: hidden;
 }
 
 [data-theme='dark'] .chats-page {
-  --chat-bg: #07111f;
-  --chat-panel: rgba(15, 23, 42, 0.72);
-  --chat-panel-strong: rgba(15, 23, 42, 0.92);
-  --chat-text: #f8fafc;
-  --chat-text-secondary: #cbd5e1;
-  --chat-muted: #94a3b8;
-  --chat-border: rgba(255, 255, 255, 0.1);
-  --chat-input: rgba(15, 23, 42, 0.82);
+  --chat-bg: #0a131a;
+  --chat-panel: rgba(17, 27, 33, 0.62);
+  --chat-panel-strong: rgba(23, 33, 39, 0.9);
+  --chat-text: #e9edef;
+  --chat-text-secondary: #aebac1;
+  --chat-muted: #8696a0;
+  --chat-border: rgba(255, 255, 255, 0.09);
+  --chat-input: rgba(255, 255, 255, 0.04);
   --chat-button: rgba(255, 255, 255, 0.06);
   --chat-button-hover: rgba(255, 255, 255, 0.12);
-  --chat-selected: rgba(37, 99, 235, 0.22);
-  --chat-accent: #60a5fa;
+  --chat-selected: rgba(0, 168, 132, 0.18);
+  --chat-accent: #21c7a8;
+  --chat-accent-strong: #25d9b6;
+  --chat-accent-soft: rgba(33, 199, 168, 0.16);
 
-  --chat-glass-bg: rgba(15, 23, 42, 0.55);
+  --chat-glass-fill: linear-gradient(155deg, rgba(40, 54, 63, 0.72), rgba(17, 27, 33, 0.5));
   --chat-glass-border: rgba(255, 255, 255, 0.1);
-  --chat-glass-highlight: rgba(255, 255, 255, 0.06);
+  --chat-glass-highlight: rgba(255, 255, 255, 0.12);
+  --chat-glass-shadow: 0 14px 44px rgba(0, 0, 0, 0.5);
+
+  --chat-atmosphere:
+    radial-gradient(1200px 700px at 10% -10%, rgba(0, 168, 132, 0.2), transparent 58%),
+    radial-gradient(1000px 800px at 110% 6%, rgba(37, 99, 235, 0.16), transparent 56%),
+    radial-gradient(900px 900px at 72% 114%, rgba(139, 92, 246, 0.14), transparent 60%),
+    linear-gradient(180deg, #0b151c, #060d12);
 }
 
 /* Full-bleed WhatsApp/Intercom split: 64px icon rail, 300px chat list, conversation gets the
@@ -58,11 +80,12 @@
    (no CSS zoom). */
 .chats-layout {
   display: grid;
-  grid-template-columns: 64px 300px minmax(0, 1fr);
+  grid-template-columns: 64px 320px minmax(0, 1fr);
   width: 100%;
   height: 100%;
   min-height: 0;
-  background: var(--chat-panel-strong);
+  /* Transparent so the .chats-page atmosphere refracts through every glass surface. */
+  background: transparent;
   border: none;
   border-radius: 0;
   overflow: hidden;
@@ -70,7 +93,7 @@
 
 /* When the info panel is open it becomes a real 4th column on desktop. */
 .chats-layout.info-open {
-  grid-template-columns: 64px 300px minmax(0, 1fr) 320px;
+  grid-template-columns: 64px 320px minmax(0, 1fr) 320px;
 }
 
 /* =============================================================================
@@ -94,11 +117,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 9px;
-  background: linear-gradient(135deg, #2563eb, #22c55e);
+  border-radius: 11px;
+  background: linear-gradient(140deg, var(--chat-accent-strong), #4f8cff);
   color: #fff;
   flex-shrink: 0;
   margin-bottom: 0.25rem;
+  box-shadow: 0 4px 12px rgba(0, 168, 132, 0.35);
 }
 
 .chats-iconbar-nav {
@@ -131,8 +155,8 @@
 }
 
 .chats-iconbar-btn.active {
-  background: var(--chat-selected);
-  border-color: rgba(37, 99, 235, 0.3);
+  background: var(--chat-accent-soft);
+  border-color: transparent;
   color: var(--chat-accent);
 }
 
@@ -517,46 +541,80 @@
   gap: 0.5rem;
 }
 
+/* WhatsApp-Desktop rows: no full-width rules, no left accent bar. A hairline divider sits
+   inset behind the text only (not under the avatar), and the active/hover state is a soft
+   rounded fill that floats inside the column — clean rows, not a data table. */
 .chat-item-card {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 0.8rem;
-  min-height: 72px;
-  padding: 0.6rem 0.85rem;
+  gap: 0.85rem;
+  min-height: 74px;
+  margin: 0 0.4rem;
+  padding: 0.55rem 0.6rem;
   border: none;
-  border-bottom: 1px solid var(--chat-border);
-  border-left: 3px solid transparent;
-  border-radius: 0;
+  border-radius: 14px;
   cursor: pointer;
   transition: background 0.13s ease;
   user-select: none;
   background: transparent;
 }
 
+/* Inset hairline divider under the text block only — the WhatsApp look. */
+.chat-item-card:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 4.1rem;
+  right: 0.6rem;
+  bottom: 0;
+  height: 1px;
+  background: var(--chat-border);
+}
+
 .chat-item-card:hover {
   background: var(--chat-button-hover);
 }
 
-.chat-item-card.active {
+.chat-item-card.active,
+.chat-item-card.active:hover {
   background: var(--chat-selected);
-  border-left-color: var(--chat-accent);
+}
+
+.chat-item-card.active::after {
+  opacity: 0;
 }
 
 .chat-avatar {
-  width: 48px;
-  height: 48px;
+  position: relative;
+  width: 49px;
+  height: 49px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #dbeafe, #dcfce7);
+  background: linear-gradient(140deg, var(--chat-accent-strong), #4f8cff);
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #475569;
+  color: #fff;
   flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(11, 31, 38, 0.12);
 }
 
-.chat-item-card.active .chat-avatar {
-  color: #2563eb;
+/* Live presence dot on the avatar (WhatsApp/iMessage). */
+.chat-avatar::after {
+  content: '';
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #2ecc71;
+  border: 2.5px solid var(--chat-panel-strong);
+  opacity: 0;
+}
+
+.chat-item-card.online .chat-avatar::after {
+  opacity: 1;
 }
 
 .chat-item-info {
@@ -641,29 +699,6 @@
   align-items: center;
   gap: 0.3rem;
   flex-shrink: 0;
-}
-
-/* Type is conveyed by the avatar glyph; keep the text label tiny and low-contrast so the
-   eye lands on name / snippet / unread first. */
-.chat-type-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.1rem 0.3rem;
-  border-radius: 5px;
-  font-size: 0.6rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-}
-
-.chat-type-badge.direct {
-  background: rgba(37, 99, 235, 0.12);
-  color: var(--chat-accent);
-}
-
-.chat-type-badge.group {
-  background: var(--chat-button);
-  color: var(--chat-text-secondary);
 }
 
 .chats-room {
@@ -791,15 +826,15 @@
 
 /* Header actions — flat, borderless icon buttons (search / info / more). */
 .room-action-btn {
-  width: 32px;
-  height: 32px;
+  width: 38px;
+  height: 38px;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 9px;
-  border: 1px solid var(--chat-border);
-  background: var(--chat-button);
+  border-radius: 50%;
+  border: none;
+  background: transparent;
   color: var(--chat-text-secondary);
   cursor: pointer;
   transition: all 0.15s ease;
@@ -807,13 +842,11 @@
 
 .room-action-btn:hover {
   background: var(--chat-button-hover);
-  border-color: rgba(37, 99, 235, 0.3);
   color: var(--chat-text);
 }
 
 .room-action-btn.active {
-  background: var(--chat-selected);
-  border-color: rgba(37, 99, 235, 0.35);
+  background: var(--chat-accent-soft);
   color: var(--chat-accent);
 }
 
@@ -843,21 +876,31 @@
 }
 
 .room-avatar {
-  width: 40px;
-  height: 40px;
+  position: relative;
+  width: 42px;
+  height: 42px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #dbeafe, #dcfce7);
+  background: linear-gradient(140deg, var(--chat-accent-strong), #4f8cff);
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #475569;
+  color: #fff;
   flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(11, 31, 38, 0.14);
 }
 
-[data-theme='dark'] .room-avatar {
-  background: rgba(255, 255, 255, 0.08);
-  color: #cbd5e1;
+/* Presence dot on the header avatar. */
+.room-avatar.online::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #2ecc71;
+  border: 2.5px solid var(--chat-panel-strong);
 }
 
 /* Primary: the chat name dominates the header. */
@@ -1026,37 +1069,38 @@
    INPUT BAR: Bottom Footer
    ============================================================================= */
 .room-input-footer {
-  background: var(--chat-panel);
   border-top: 1px solid var(--chat-border);
-  padding: 0.5rem 0.85rem;
+  padding: 0.55rem 1rem 0.7rem;
   box-sizing: border-box;
   flex-shrink: 0;
 }
 
 .chats-page .input-form {
   display: flex;
-  gap: 0.5rem;
-  align-items: center;
+  gap: 0.4rem;
+  align-items: flex-end;
 }
 
 .message-text-input {
   flex: 1;
   min-width: 0; /* dominant + never pushes the buttons into overflow */
-  padding: 0.6rem 1rem;
-  border: 1px solid transparent;
-  border-radius: 22px;
-  font-size: 0.9rem;
+  padding: 0.7rem 1.1rem;
+  border: 1px solid var(--chat-glass-border);
+  border-radius: 24px;
+  font-size: 0.92rem;
   background: var(--chat-input);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   color: var(--chat-text);
   outline: none;
   transition: all 0.15s;
   box-sizing: border-box;
+  box-shadow: inset 0 1px 0 var(--chat-glass-highlight);
 }
 
 .message-text-input:focus {
   border-color: var(--chat-accent);
-  background: var(--chat-panel-strong);
-  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.14);
+  box-shadow: 0 0 0 3px var(--chat-accent-soft), inset 0 1px 0 var(--chat-glass-highlight);
 }
 
 .message-text-input::placeholder {
@@ -2238,129 +2282,49 @@
 }
 
 /* =============================================================================
-   DARK MODE — Apple-style Liquid Glass on the major surfaces only.
-   Light mode keeps the clean white panels defined above (theme-aware).
-   ============================================================================= */
-[data-theme='dark'] .chats-page {
-  background: transparent;
-}
-
-[data-theme='dark'] .chats-layout {
-  background: transparent;
-}
-
-/* Workspace rail, inbox, header, composer, info panel, dropdowns = glass surfaces. */
-[data-theme='dark'] .chats-iconbar,
-[data-theme='dark'] .chats-inbox,
-[data-theme='dark'] .room-header,
-[data-theme='dark'] .room-input-footer,
-[data-theme='dark'] .chat-info-panel,
-[data-theme='dark'] .chats-channel-menu {
-  background: rgba(15, 23, 42, 0.55);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  backdrop-filter: blur(24px) saturate(180%);
-  border-color: rgba(255, 255, 255, 0.1);
-}
-
-[data-theme='dark'] .chats-iconbar {
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-[data-theme='dark'] .chats-inbox {
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-[data-theme='dark'] .chat-info-panel {
-  border-left: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-[data-theme='dark'] .room-header {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-[data-theme='dark'] .room-input-footer {
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-/* The conversation canvas: deep, soft, no neon. */
-[data-theme='dark'] .chats-room {
-  background: rgba(2, 6, 16, 0.35);
-}
-
-/* Inbox sub-surfaces become transparent so the inbox glass shows through. */
-[data-theme='dark'] .chats-inbox-header,
-[data-theme='dark'] .chats-inbox-toolbar {
-  background: transparent;
-  border-bottom-color: rgba(255, 255, 255, 0.07);
-}
-
-/* Chat rows: subtle translucent active state on the glass surface. */
-[data-theme='dark'] .chat-item-card.active {
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.22), rgba(34, 197, 94, 0.12));
-  border-color: rgba(99, 179, 237, 0.3);
-  border-left-color: #60a5fa;
-}
-
-[data-theme='dark'] .chat-avatar {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.1);
-  color: #cbd5e1;
-}
-
-[data-theme='dark'] .chat-info-header {
-  border-bottom-color: rgba(255, 255, 255, 0.08);
-}
-
-[data-theme='dark'] .chat-info-avatar {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.12);
-  color: #93c5fd;
-}
-
-[data-theme='dark'] .chat-info-stat {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.08);
-}
-
-/* Floating channel dropdown gets a soft shadow only (no glow). */
-[data-theme='dark'] .chats-channel-menu {
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
-}
-
-/* =============================================================================
-   LIGHT MODE — Apple-style Liquid Glass equivalent (header, sidebar, dropdowns/menus,
-   composer, info panel only). Same surfaces as the dark-mode block above, tuned for a bright
-   background: soft semi-transparent white + blur/saturate, no heavy glow.
+   APPLE-STYLE LIQUID GLASS — one theme-agnostic system driven by the --chat-glass-*
+   tokens. Every major surface (icon rail, full inbox column, conversation header,
+   composer, info panel, floating menus) is a translucent gradient pane with a hairline
+   glass border, a bright specular top-edge, and a soft floating shadow over the
+   atmospheric backdrop. The message canvas keeps its WhatsApp wallpaper (opaque).
    ============================================================================= */
 .chats-iconbar,
-.chats-inbox-header,
+.chats-inbox,
 .room-header,
 .room-input-footer,
 .chat-info-panel,
 .chats-channel-menu {
-  background: var(--chat-glass-bg);
+  background: var(--chat-glass-fill);
   -webkit-backdrop-filter: blur(var(--chat-glass-blur)) saturate(var(--chat-glass-saturate));
   backdrop-filter: blur(var(--chat-glass-blur)) saturate(var(--chat-glass-saturate));
   border-color: var(--chat-glass-border);
 }
 
-.chats-channel-menu {
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.14), inset 0 1px 0 var(--chat-glass-highlight);
-}
-
+/* Specular top highlight (the bright glass edge) + soft inner sheen on every glass pane. */
+.chats-iconbar,
+.chats-inbox,
 .room-header,
 .room-input-footer,
-.chats-iconbar,
 .chat-info-panel {
   box-shadow: inset 0 1px 0 var(--chat-glass-highlight);
 }
 
-[data-theme='dark'] .chats-channel-menu,
-[data-theme='dark'] .room-header,
-[data-theme='dark'] .room-input-footer,
-[data-theme='dark'] .chats-iconbar,
-[data-theme='dark'] .chat-info-panel {
-  box-shadow: inset 0 1px 0 var(--chat-glass-highlight);
+/* Floating menus lift off the surface with a real drop shadow + specular edge. */
+.chats-channel-menu {
+  background: var(--chat-glass-fill);
+  box-shadow: var(--chat-glass-shadow), inset 0 1px 0 var(--chat-glass-highlight);
+}
+
+/* Inbox sub-surfaces stay transparent so the column's glass refraction reads continuously. */
+.chats-inbox-header,
+.chats-inbox-toolbar {
+  background: transparent;
+}
+
+/* The conversation canvas keeps its opaque WhatsApp wallpaper (set on .chats-room above);
+   in dark mode it deepens so the green/white bubbles pop. */
+[data-theme='dark'] .chats-room {
+  background: #0b141a;
 }
 
 /* =============================================================================
@@ -2410,7 +2374,7 @@
   align-items: center;
   gap: 0.5rem;
   /* WhatsApp-Desktop density: wide on narrow panes, capped on very wide screens. */
-  max-width: min(72%, 640px);
+  max-width: min(75%, 680px);
   min-width: 0;
 }
 
@@ -2425,12 +2389,12 @@
 /* Bubble shape: 18px radius with a WhatsApp-style flattened "tail" corner. */
 .message-bubble {
   max-width: 100%;
-  padding: 0.5rem 0.7rem 0.4rem;
-  border-radius: 18px;
-  font-size: 0.9rem;
-  line-height: 1.45;
+  padding: 0.55rem 0.85rem 0.45rem;
+  border-radius: 20px;
+  font-size: 0.95rem;
+  line-height: 1.5;
   position: relative;
-  box-shadow: 0 1px 1.5px rgba(11, 20, 26, 0.13);
+  box-shadow: 0 1px 2px rgba(11, 20, 26, 0.16);
 }
 
 .message-bubble.incoming {
