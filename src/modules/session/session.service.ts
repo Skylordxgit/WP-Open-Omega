@@ -393,6 +393,13 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
           connectedAt: new Date(),
           lastActiveAt: new Date(),
         });
+
+        // Best-effort: import available history from the engine into the DB so the dashboard shows
+        // existing conversations, not only messages observed after this connect. Fully non-blocking —
+        // a failure here never affects the ready flow. Depth is engine-limited (see method docs).
+        void this.backfillSessionHistory(id).catch(err =>
+          this.logger.warn(`History backfill failed for session ${id}`, { sessionId: id, error: String(err) }),
+        );
       },
       onMessage: (message): void => {
         // Status/Story posts arrive via the inbound path for some engines; don't persist or webhook them.
@@ -433,29 +440,10 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
               incoming.senderPhone = await this.resolveSenderPhone(id, incoming.author ?? incoming.from);
             }
 
-            const metadata: Record<string, unknown> = {};
-            if (incoming.media) {
-              metadata.media = incoming.media;
-            }
-            if (incoming.quotedMessage) {
-              metadata.quotedMessage = incoming.quotedMessage;
-            }
-
-            const dbMessage = this.messageRepository.create({
-              sessionId: id,
-              waMessageId: incoming.id,
-              chatId: incoming.chatId,
-              from: incoming.from,
-              to: incoming.to,
-              body: incoming.body,
-              type: incoming.type,
-              direction: incoming.fromMe ? MessageDirection.OUTGOING : MessageDirection.INCOMING,
-              timestamp: incoming.timestamp,
-              status: MessageStatus.SENT,
-              metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
-            });
-
-            void this.messageRepository.save(dbMessage).catch(err => {
+            // Persist (upsert) so the dashboard chats view can render history. Upserting by
+            // (sessionId, waMessageId) means a later history backfill re-importing this same message
+            // can never create a duplicate.
+            void this.upsertObservedMessage(id, incoming).catch(err => {
               this.logger.error(`Failed to save incoming message ${incoming.id} to database`, String(err));
             });
 
@@ -505,6 +493,15 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
             void this.webhookService.dispatch(id, 'message.sent', finalMessage);
             // Emit real-time event to WebSocket clients (as message.sent, not message.received)
             this.eventsGateway.emitMessageSent(id, finalMessage);
+
+            // Persist the outgoing message. This is the ONLY capture path for sends composed on the
+            // linked phone (the dashboard API path saves its own sends separately) — without it those
+            // agent replies never reach the DB and conversations render one-sided. The upsert claims
+            // the API path's pending row when present, so an API-originated send is never duplicated.
+            const outgoing: IncomingMessage = finalMessage;
+            void this.upsertObservedMessage(id, outgoing, { claimPendingOutgoing: true }).catch(err => {
+              this.logger.error(`Failed to save outgoing message ${outgoing.id} to database`, String(err));
+            });
           })
           .catch(err => this.logger.error(`onMessageCreate handler failed for ${id}`, String(err)));
       },
@@ -904,11 +901,16 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
   }
 
   private async getChatsFromStoredMessages(sessionId: string): Promise<ChatSummary[]> {
-    const messages = await this.messageRepository.find({
-      where: { sessionId },
-      order: { createdAt: 'DESC' },
-      take: SessionService.CHAT_FALLBACK_MESSAGE_SCAN,
-    });
+    // Order by the message timestamp (not createdAt): backfilled history is inserted "now" with old
+    // timestamps, so a createdAt scan would pick the wrong "last message" per chat and surface stale
+    // rows. Ordering by timestamp makes the first row seen per chat its genuine latest message.
+    const messages = await this.messageRepository
+      .createQueryBuilder('message')
+      .where('message.sessionId = :sessionId', { sessionId })
+      .orderBy('COALESCE(message.timestamp, 99999999999)', 'DESC')
+      .addOrderBy('message.createdAt', 'DESC')
+      .take(SessionService.CHAT_FALLBACK_MESSAGE_SCAN)
+      .getMany();
 
     const chats = new Map<string, ChatSummary>();
     for (const message of messages) {
@@ -930,6 +932,162 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
     }
 
     return [...chats.values()].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+  }
+
+  /** Build the persisted `metadata` blob (media / quoted message) for an engine message, or undefined. */
+  private buildMessageMetadata(incoming: IncomingMessage): Record<string, unknown> | undefined {
+    const metadata: Record<string, unknown> = {};
+    if (incoming.media) {
+      metadata.media = incoming.media;
+    }
+    if (incoming.quotedMessage) {
+      metadata.quotedMessage = incoming.quotedMessage;
+    }
+    return Object.keys(metadata).length > 0 ? metadata : undefined;
+  }
+
+  /**
+   * Persist a message observed from the engine (live receive, live send echo, or history backfill),
+   * idempotently. Dedup is keyed by (sessionId, waMessageId) so the same message arriving via two
+   * paths — e.g. a live echo and a later backfill pass — is stored exactly once.
+   *
+   * `claimPendingOutgoing` handles the dashboard API send race: the API path inserts a PENDING
+   * outgoing row and only stamps its waMessageId after the engine resolves, but the `message_create`
+   * echo can fire first. Rather than insert a second row, we adopt that pending row. Without this an
+   * API-originated send would be duplicated once message_create persistence is enabled.
+   */
+  private async upsertObservedMessage(
+    sessionId: string,
+    incoming: IncomingMessage,
+    opts: { claimPendingOutgoing?: boolean } = {},
+  ): Promise<void> {
+    const direction = incoming.fromMe ? MessageDirection.OUTGOING : MessageDirection.INCOMING;
+
+    // 1. Already stored under this WhatsApp id — never duplicate.
+    if (incoming.id) {
+      const existing = await this.messageRepository.findOne({
+        where: { sessionId, waMessageId: incoming.id },
+      });
+      if (existing) {
+        return;
+      }
+    }
+
+    // 2. Adopt the dashboard API's in-flight pending row instead of inserting a duplicate outgoing row.
+    //    Only PENDING/SENT rows with no waMessageId qualify (a FAILED send is left untouched).
+    if (direction === MessageDirection.OUTGOING && opts.claimPendingOutgoing) {
+      const pending = await this.messageRepository.findOne({
+        where: {
+          sessionId,
+          chatId: incoming.chatId,
+          direction: MessageDirection.OUTGOING,
+          waMessageId: IsNull(),
+          status: Not(MessageStatus.FAILED),
+        },
+        order: { createdAt: 'DESC' },
+      });
+      if (pending) {
+        pending.waMessageId = incoming.id;
+        pending.status = MessageStatus.SENT;
+        if (typeof incoming.timestamp === 'number') {
+          pending.timestamp = incoming.timestamp;
+        }
+        const meta = this.buildMessageMetadata(incoming);
+        if (meta) {
+          pending.metadata = meta;
+        }
+        await this.messageRepository.save(pending);
+        return;
+      }
+    }
+
+    // 3. Insert a fresh row (an inbound message, or a send composed outside the dashboard — e.g. on
+    //    the linked phone — which has no pending row to adopt).
+    const row = this.messageRepository.create({
+      sessionId,
+      waMessageId: incoming.id,
+      chatId: incoming.chatId,
+      from: incoming.from,
+      to: incoming.to,
+      body: incoming.body,
+      type: incoming.type,
+      direction,
+      timestamp: incoming.timestamp,
+      status: MessageStatus.SENT,
+      metadata: this.buildMessageMetadata(incoming),
+    });
+    await this.messageRepository.save(row);
+  }
+
+  /**
+   * Best-effort import of existing chat history from the engine into the DB on connect, so the
+   * dashboard shows pre-existing conversations (both sides) instead of only messages observed after
+   * the gateway started. Idempotent (upsert) and bounded; never throws into the caller.
+   *
+   * Engine limitation (reported honestly): depth is whatever the engine exposes —
+   *  - whatsapp-web.js `chat.fetchMessages({ limit })` returns recent in-memory/store messages; very
+   *    old history is not reliably reachable without WhatsApp Web lazy-loading it.
+   *  - the minimal Baileys adapter does not implement getChatHistory (throws), so per-chat backfill
+   *    is skipped there; its history instead accumulates live via the message store.
+   * Controlled by HISTORY_BACKFILL_ON_CONNECT (default on) and bounded by
+   * HISTORY_BACKFILL_MAX_CHATS / HISTORY_BACKFILL_PER_CHAT.
+   */
+  private async backfillSessionHistory(sessionId: string): Promise<void> {
+    if (process.env.HISTORY_BACKFILL_ON_CONNECT === 'false') {
+      return;
+    }
+    const engine = this.engines.get(sessionId);
+    if (!engine) {
+      return;
+    }
+    const clampInt = (raw: string | undefined, def: number, max: number): number => {
+      const n = raw ? parseInt(raw, 10) : NaN;
+      return Number.isFinite(n) ? Math.min(Math.max(n, 1), max) : def;
+    };
+    const maxChats = clampInt(process.env.HISTORY_BACKFILL_MAX_CHATS, 100, 1000);
+    const perChat = clampInt(process.env.HISTORY_BACKFILL_PER_CHAT, 100, 500);
+
+    let chats: ChatSummary[];
+    try {
+      chats = await engine.getChats();
+    } catch (error) {
+      this.logger.warn(`History backfill: could not list chats for ${sessionId}`, {
+        sessionId,
+        reason: error instanceof Error ? error.message : String(error),
+      });
+      return;
+    }
+
+    let imported = 0;
+    let chatsWithHistory = 0;
+    for (const chat of chats.slice(0, maxChats)) {
+      try {
+        const history = await engine.getChatHistory(chat.id, perChat, false);
+        if (history.length > 0) {
+          chatsWithHistory += 1;
+        }
+        for (const message of history) {
+          if (message.isStatusBroadcast) {
+            continue;
+          }
+          await this.upsertObservedMessage(sessionId, message);
+          imported += 1;
+        }
+      } catch (error) {
+        // Per-chat failures are expected and non-fatal (e.g. Baileys getChatHistory is unsupported).
+        this.logger.debug(`History backfill: skipped chat ${chat.id}`, {
+          sessionId,
+          reason: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    this.logger.log(`History backfill complete for ${sessionId}`, {
+      sessionId,
+      chatsScanned: Math.min(chats.length, maxChats),
+      chatsWithHistory,
+      messagesImported: imported,
+      action: 'history_backfill',
+    });
   }
 
   async sendSeen(id: string, chatId: string): Promise<boolean> {

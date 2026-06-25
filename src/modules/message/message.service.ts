@@ -265,7 +265,12 @@ export class MessageService {
     const query = this.messageRepository
       .createQueryBuilder('message')
       .where('message.sessionId = :sessionId', { sessionId })
-      .orderBy('message.createdAt', 'DESC')
+      // Order by the message's WhatsApp timestamp (not createdAt, the row-insert time). Backfilled and
+      // out-of-order history is inserted "now" but carries an old timestamp, so ordering by createdAt
+      // would scatter it to the newest page and break load-older pagination. COALESCE keeps the rare
+      // timestamp-less row (an in-flight pending / failed send) at the top (newest), where it belongs.
+      .orderBy('COALESCE(message.timestamp, 99999999999)', 'DESC')
+      .addOrderBy('message.createdAt', 'DESC')
       .skip(offset)
       .take(limit);
 

@@ -4,7 +4,7 @@ import { Repository, DataSource } from 'typeorm';
 import { NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { SessionService } from './session.service';
 import { Session, SessionStatus } from './entities/session.entity';
-import { Message, MessageStatus } from '../message/entities/message.entity';
+import { Message, MessageStatus, MessageDirection } from '../message/entities/message.entity';
 import { EngineFactory } from '../../engine/engine.factory';
 import { EventsGateway } from '../events/events.gateway';
 import { WebhookService } from '../webhook/webhook.service';
@@ -57,6 +57,7 @@ describe('SessionService', () => {
       create: jest.fn(),
       save: jest.fn().mockResolvedValue(undefined),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
+      createQueryBuilder: jest.fn(),
     };
 
     dataSource = {
@@ -773,30 +774,24 @@ describe('SessionService', () => {
       await service.start('sess-uuid-1');
 
       mockEngine.getChats.mockRejectedValue(new Error('Timed out waiting for WhatsApp chat list'));
-      (messageRepository.find as jest.Mock).mockResolvedValue([
-        {
-          sessionId: 'sess-uuid-1',
-          chatId: '120363000@g.us',
-          body: 'Latest group message',
-          timestamp: 1700000100,
-          createdAt,
-        },
-        {
-          sessionId: 'sess-uuid-1',
-          chatId: '628123456789@c.us',
-          body: 'Hello',
-          timestamp: 1700000000,
-          createdAt: new Date('2026-06-19T07:59:00Z'),
-        },
-      ]);
+      const fallbackQb = {
+        where: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        addOrderBy: jest.fn().mockReturnThis(),
+        take: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([
+          { sessionId: 'sess-uuid-1', chatId: '120363000@g.us', body: 'Latest group message', timestamp: 1700000100, createdAt },
+          { sessionId: 'sess-uuid-1', chatId: '628123456789@c.us', body: 'Hello', timestamp: 1700000000, createdAt: new Date('2026-06-19T07:59:00Z') },
+        ]),
+      };
+      (messageRepository.createQueryBuilder as jest.Mock).mockReturnValue(fallbackQb);
 
       const result = await service.getChats('sess-uuid-1');
 
-      expect(messageRepository.find).toHaveBeenCalledWith({
-        where: { sessionId: 'sess-uuid-1' },
-        order: { createdAt: 'DESC' },
-        take: 250,
-      });
+      // Fallback must order by the message timestamp (so backfilled rows surface their true latest
+      // message), not by createdAt (row-insert time).
+      expect(fallbackQb.orderBy).toHaveBeenCalledWith('COALESCE(message.timestamp, 99999999999)', 'DESC');
+      expect(fallbackQb.take).toHaveBeenCalledWith(250);
       expect(result).toEqual([
         {
           id: '120363000@g.us',
@@ -822,6 +817,67 @@ describe('SessionService', () => {
       (repository.findOne as jest.Mock).mockResolvedValue(session);
 
       await expect(service.getChats('sess-uuid-1')).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  // ── upsertObservedMessage (history persistence + dedup) ───────────
+
+  describe('upsertObservedMessage', () => {
+    const msg = (o: Partial<IncomingMessage> = {}): IncomingMessage => ({
+      id: 'wa-x',
+      from: 'peer@c.us',
+      to: 'me@c.us',
+      chatId: 'peer@c.us',
+      body: 'hi',
+      type: 'text',
+      timestamp: 1706868000,
+      fromMe: false,
+      isGroup: false,
+      ...o,
+    });
+    type Upsert = (s: string, m: IncomingMessage, o?: { claimPendingOutgoing?: boolean }) => Promise<void>;
+    const call = (m: IncomingMessage, o?: { claimPendingOutgoing?: boolean }): Promise<void> =>
+      (service as unknown as { upsertObservedMessage: Upsert }).upsertObservedMessage('sess-1', m, o);
+
+    it('inserts an inbound message when it is not already stored', async () => {
+      (messageRepository.findOne as jest.Mock).mockResolvedValue(null);
+      (messageRepository.create as jest.Mock).mockImplementation((e: unknown) => e);
+      await call(msg({ id: 'in-1', fromMe: false }));
+      expect(messageRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ sessionId: 'sess-1', waMessageId: 'in-1', direction: MessageDirection.INCOMING }),
+      );
+      expect(messageRepository.save).toHaveBeenCalled();
+    });
+
+    it('never duplicates a message already stored under the same waMessageId (backfill re-import safe)', async () => {
+      (messageRepository.findOne as jest.Mock).mockResolvedValue({ id: 'row-1', waMessageId: 'dup-1' });
+      await call(msg({ id: 'dup-1' }));
+      expect(messageRepository.create).not.toHaveBeenCalled();
+      expect(messageRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('adopts the API pending row for an outgoing echo instead of inserting a duplicate', async () => {
+      const pending = { id: 'p1', waMessageId: null, status: MessageStatus.PENDING, direction: MessageDirection.OUTGOING };
+      (messageRepository.findOne as jest.Mock)
+        .mockResolvedValueOnce(null) // none by waMessageId
+        .mockResolvedValueOnce(pending); // claimable pending row
+      await call(msg({ id: 'out-1', fromMe: true, from: 'me@c.us', to: 'peer@c.us' }), { claimPendingOutgoing: true });
+      expect(messageRepository.create).not.toHaveBeenCalled();
+      expect(messageRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'p1', waMessageId: 'out-1', status: MessageStatus.SENT }),
+      );
+    });
+
+    it('inserts a fresh outgoing row when no pending row exists (send composed on the linked phone)', async () => {
+      (messageRepository.findOne as jest.Mock)
+        .mockResolvedValueOnce(null) // none by waMessageId
+        .mockResolvedValueOnce(null); // no pending row to adopt
+      (messageRepository.create as jest.Mock).mockImplementation((e: unknown) => e);
+      await call(msg({ id: 'out-2', fromMe: true, from: 'me@c.us', to: 'peer@c.us' }), { claimPendingOutgoing: true });
+      expect(messageRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ waMessageId: 'out-2', direction: MessageDirection.OUTGOING }),
+      );
+      expect(messageRepository.save).toHaveBeenCalled();
     });
   });
 

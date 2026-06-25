@@ -305,6 +305,7 @@ describe('MessageService', () => {
     interface QbMock {
       where: jest.Mock;
       orderBy: jest.Mock;
+      addOrderBy: jest.Mock;
       skip: jest.Mock;
       take: jest.Mock;
       andWhere: jest.Mock;
@@ -314,6 +315,7 @@ describe('MessageService', () => {
       const qb: QbMock = {
         where: jest.fn(),
         orderBy: jest.fn(),
+        addOrderBy: jest.fn(),
         skip: jest.fn(),
         take: jest.fn(),
         andWhere: jest.fn(),
@@ -321,11 +323,22 @@ describe('MessageService', () => {
       };
       qb.where.mockReturnValue(qb);
       qb.orderBy.mockReturnValue(qb);
+      qb.addOrderBy.mockReturnValue(qb);
       qb.skip.mockReturnValue(qb);
       qb.take.mockReturnValue(qb);
       qb.andWhere.mockReturnValue(qb);
       return qb;
     };
+
+    it('orders by message timestamp (not createdAt) so backfilled history paginates chronologically', async () => {
+      const qb = makeQb();
+      (repository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      await service.getMessages('sess-1', { chatId: 'c@c.us' });
+      // Primary sort must be the WhatsApp timestamp (COALESCE keeps timestamp-less rows newest),
+      // with createdAt only as a stable tiebreaker.
+      expect(qb.orderBy).toHaveBeenCalledWith('COALESCE(message.timestamp, 99999999999)', 'DESC');
+      expect(qb.addOrderBy).toHaveBeenCalledWith('message.createdAt', 'DESC');
+    });
 
     it('falls back to defaults on NaN limit/offset (never take(NaN))', async () => {
       const qb = makeQb();
