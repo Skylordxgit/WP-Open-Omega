@@ -917,7 +917,9 @@
   overflow-x: hidden;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  /* Vertical rhythm between messages is handled by .message-bubble-wrapper margins
+     in the FINAL WHATSAPP MESSAGE STYLES section, not by a flex gap here, so grouped
+     vs. sender-change spacing stays a single, unambiguous rule. */
   /* WhatsApp-style faint doodle wash — soft, warm, barely-there. */
   background-color: #efeae2;
   background-image:
@@ -934,18 +936,6 @@
   background-image:
     radial-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 0),
     radial-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 0);
-}
-
-/* Add breathing room only when the sender flips, so a run from one side stays tight and
-   scannable while the eye still gets a clear break between speakers. */
-.message-bubble-wrapper + .message-bubble-wrapper.incoming,
-.message-bubble-wrapper + .message-bubble-wrapper.outgoing {
-  margin-top: 0.1rem;
-}
-
-.message-bubble-wrapper.incoming + .message-bubble-wrapper.outgoing,
-.message-bubble-wrapper.outgoing + .message-bubble-wrapper.incoming {
-  margin-top: 0.55rem;
 }
 
 /* "Load older messages" control pinned at the top of the scroll area. */
@@ -1006,52 +996,6 @@
   padding: 2rem;
 }
 
-.message-bubble-wrapper {
-  display: flex;
-  width: 100%;
-}
-
-.message-bubble-wrapper.incoming {
-  justify-content: flex-start;
-}
-
-.message-bubble-wrapper.outgoing {
-  justify-content: flex-end;
-}
-
-.message-bubble {
-  max-width: 100%;
-  padding: 0.5rem 0.7rem 0.4rem;
-  border-radius: 18px;
-  font-size: 0.9rem;
-  line-height: 1.45;
-  position: relative;
-  box-shadow: 0 1px 1.5px rgba(11, 20, 26, 0.13);
-}
-
-.message-bubble.incoming {
-  background: #ffffff;
-  color: #111b21;
-  border-top-left-radius: 6px;
-}
-
-.message-bubble.outgoing {
-  background: #d9fdd3; /* Soft WhatsApp Green */
-  color: #111b21;
-  border-top-right-radius: 6px;
-}
-
-/* Dark theme bubbles — WhatsApp Desktop dark palette. */
-[data-theme='dark'] .message-bubble.incoming {
-  background: #202c33;
-  color: #e9edef;
-}
-
-[data-theme='dark'] .message-bubble.outgoing {
-  background: #005c4b; /* Dark WhatsApp Green */
-  color: #e9edef;
-}
-
 .chats-page .message-text {
   word-break: break-word;
   overflow-wrap: anywhere;
@@ -1076,49 +1020,6 @@
 
 [data-theme='dark'] .message-bubble.outgoing .message-text a {
   color: #aef2dd;
-}
-
-.chats-page .message-meta {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.25rem;
-  margin-top: 0.25rem;
-}
-
-.chats-page .message-time {
-  font-size: 0.6875rem;
-  color: var(--chat-muted);
-}
-
-/* On the green outgoing bubble, the meta reads as WhatsApp's muted green-grey, not slate. */
-.message-bubble.outgoing .message-time {
-  color: rgba(11, 20, 26, 0.45);
-}
-
-[data-theme='dark'] .message-bubble.outgoing .message-time {
-  color: rgba(233, 237, 239, 0.6);
-}
-
-[data-theme='dark'] .message-bubble.incoming .message-time {
-  color: rgba(233, 237, 239, 0.5);
-}
-
-.chats-page .message-status-icon {
-  font-size: 0.75rem;
-  color: rgba(11, 20, 26, 0.45);
-}
-
-[data-theme='dark'] .chats-page .message-status-icon {
-  color: rgba(233, 237, 239, 0.6);
-}
-
-.chats-page .message-status-icon.read {
-  color: #53bdeb; /* WhatsApp blue checks */
-}
-
-[data-theme='dark'] .chats-page .message-status-icon.read {
-  color: #53bdeb;
 }
 
 /* =============================================================================
@@ -1393,11 +1294,6 @@
   transform: scale(1.15);
 }
 
-.message-bubble.media-type {
-  border-top-left-radius: 12px;
-  border-top-right-radius: 12px;
-}
-
 /* =============================================================================
    RESPONSIVENESS — verified at 1920/1600/1440/1366/1280/1024/900/768/480/390/360px.
    The page itself never scrolls (100dvh, overflow hidden) at any width; only the chat list,
@@ -1536,10 +1432,6 @@
   .doc-name {
     max-width: 140px;
   }
-
-  .message-bubble-container {
-    max-width: 92%;
-  }
 }
 
 @media (max-width: 390px) {
@@ -1569,10 +1461,6 @@
   .room-avatar {
     width: 24px;
     height: 24px;
-  }
-
-  .message-bubble {
-    font-size: 0.76rem;
   }
 }
 
@@ -1762,15 +1650,6 @@
   border-color: #2f3b43;
 }
 
-/* Slightly tighter frame around media so the caption/time sit close to the asset. */
-.message-bubble.media-type {
-  padding: 0.4rem;
-}
-
-.message-bubble.media-type .message-text {
-  padding: 0.1rem 0.35rem 0;
-}
-
 /* --- Stickers: transparent, borderless, small (WhatsApp-like) --- */
 .message-media-sticker {
   display: inline-block;
@@ -1783,21 +1662,6 @@
   height: auto;
   object-fit: contain;
   display: block;
-}
-
-.message-bubble.sticker-type {
-  background: transparent;
-  border: none;
-  box-shadow: none;
-  padding: 0;
-}
-
-.message-bubble.sticker-type .message-meta {
-  margin-top: 0.2rem;
-}
-
-[data-theme='dark'] .message-bubble.sticker-type {
-  background: transparent;
 }
 
 /* --- Voice notes: mic affordance + control, visually distinct from plain audio --- */
@@ -1904,24 +1768,6 @@
 /* =============================================================================
    HOVER MENU, REPLIES, REACTIONS, AND DELETIONS
    ============================================================================= */
-.message-bubble-container {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  /* WhatsApp-Desktop density: wide on narrow panes, capped on very wide screens. */
-  max-width: min(72%, 640px);
-  min-width: 0;
-}
-
-.message-bubble-wrapper.outgoing .message-bubble-container {
-  flex-direction: row-reverse;
-}
-
-.message-bubble-wrapper.incoming .message-bubble-container {
-  flex-direction: row;
-}
-
 /* Hover Menu */
 .message-actions-menu {
   display: none;
@@ -2046,33 +1892,6 @@
   margin-left: 2px;
 }
 
-/* Quoted Box inside Bubble — compact WhatsApp reply card: rounded, full-width fill, accent bar. */
-.message-quote-box {
-  background: rgba(0, 0, 0, 0.05);
-  border-left: 3px solid var(--chat-accent);
-  border-radius: 6px;
-  padding: 0.3rem 0.5rem;
-  margin-bottom: 0.35rem;
-  font-size: 0.8rem;
-  line-height: 1.3;
-  color: var(--chat-text-secondary);
-  cursor: pointer;
-  overflow: hidden;
-}
-
-.message-bubble.outgoing .message-quote-box {
-  background: rgba(0, 0, 0, 0.06);
-  border-left-color: #06cf9c;
-}
-
-[data-theme='dark'] .message-quote-box {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-[data-theme='dark'] .message-bubble.outgoing .message-quote-box {
-  background: rgba(0, 0, 0, 0.18);
-}
-
 .chats-page .quote-body {
   white-space: nowrap;
   overflow: hidden;
@@ -2132,12 +1951,6 @@
 .btn-close-reply:hover {
   background: var(--chat-button);
   color: var(--chat-text);
-}
-
-/* Revoked / Deleted message type */
-.message-bubble.revoked-type {
-  font-style: italic;
-  opacity: 0.6;
 }
 
 [data-theme='dark'] .message-actions-menu,
@@ -2551,8 +2364,201 @@
 }
 
 /* =============================================================================
-   DATE SEPARATORS, SENDER NAME (groups), HIGHLIGHT FLASH, SEARCH HIGHLIGHT
+   SEARCH HIGHLIGHT (in-text match emphasis, not message-bubble styling)
    ============================================================================= */
+
+.chat-highlight {
+  background: rgba(250, 204, 21, 0.55);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 1px;
+}
+
+[data-theme='dark'] .chat-highlight {
+  background: rgba(250, 204, 21, 0.35);
+}
+
+/* FINAL WHATSAPP MESSAGE STYLES - do not override below */
+
+/* Layout: incoming bubbles left-aligned, outgoing right-aligned. */
+.message-bubble-wrapper {
+  display: flex;
+  width: 100%;
+  margin-top: 0.55rem;
+}
+
+.message-bubble-wrapper:first-child {
+  margin-top: 0;
+}
+
+/* Consecutive same-sender messages (driven by the isGrouped prop) sit tighter together. */
+.message-bubble-wrapper.grouped {
+  margin-top: 0.08rem;
+}
+
+.message-bubble-wrapper.incoming {
+  justify-content: flex-start;
+}
+
+.message-bubble-wrapper.outgoing {
+  justify-content: flex-end;
+}
+
+.message-bubble-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  /* WhatsApp-Desktop density: wide on narrow panes, capped on very wide screens. */
+  max-width: min(72%, 640px);
+  min-width: 0;
+}
+
+.message-bubble-wrapper.outgoing .message-bubble-container {
+  flex-direction: row-reverse;
+}
+
+.message-bubble-wrapper.incoming .message-bubble-container {
+  flex-direction: row;
+}
+
+/* Bubble shape: 18px radius with a WhatsApp-style flattened "tail" corner. */
+.message-bubble {
+  max-width: 100%;
+  padding: 0.5rem 0.7rem 0.4rem;
+  border-radius: 18px;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  position: relative;
+  box-shadow: 0 1px 1.5px rgba(11, 20, 26, 0.13);
+}
+
+.message-bubble.incoming {
+  background: #ffffff;
+  color: #111b21;
+  border-top-left-radius: 6px;
+}
+
+.message-bubble.outgoing {
+  background: #d9fdd3; /* Soft WhatsApp Green */
+  color: #111b21;
+  border-top-right-radius: 6px;
+}
+
+[data-theme='dark'] .message-bubble.incoming {
+  background: #202c33;
+  color: #e9edef;
+}
+
+[data-theme='dark'] .message-bubble.outgoing {
+  background: #005c4b; /* Dark WhatsApp Green */
+  color: #e9edef;
+}
+
+/* Timestamp + delivery ticks, anchored bottom-right inside the bubble. */
+.chats-page .message-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+}
+
+.chats-page .message-time {
+  font-size: 0.6875rem;
+  color: var(--chat-muted);
+}
+
+.message-bubble.outgoing .message-time {
+  color: rgba(11, 20, 26, 0.45);
+}
+
+[data-theme='dark'] .message-bubble.outgoing .message-time {
+  color: rgba(233, 237, 239, 0.6);
+}
+
+[data-theme='dark'] .message-bubble.incoming .message-time {
+  color: rgba(233, 237, 239, 0.5);
+}
+
+.chats-page .message-status-icon {
+  font-size: 0.75rem;
+  color: rgba(11, 20, 26, 0.45);
+}
+
+[data-theme='dark'] .chats-page .message-status-icon {
+  color: rgba(233, 237, 239, 0.6);
+}
+
+.chats-page .message-status-icon.read {
+  color: #53bdeb; /* WhatsApp blue checks, visible on outgoing bubbles in both themes */
+}
+
+[data-theme='dark'] .chats-page .message-status-icon.read {
+  color: #53bdeb;
+}
+
+/* Compact quoted-reply card. */
+.message-quote-box {
+  background: rgba(0, 0, 0, 0.05);
+  border-left: 3px solid var(--chat-accent);
+  border-radius: 6px;
+  padding: 0.3rem 0.5rem;
+  margin-bottom: 0.35rem;
+  font-size: 0.8rem;
+  line-height: 1.3;
+  color: var(--chat-text-secondary);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.message-bubble.outgoing .message-quote-box {
+  background: rgba(0, 0, 0, 0.06);
+  border-left-color: #06cf9c;
+}
+
+[data-theme='dark'] .message-quote-box {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme='dark'] .message-bubble.outgoing .message-quote-box {
+  background: rgba(0, 0, 0, 0.18);
+}
+
+/* Media-type bubble: tighter frame so the asset/placeholder sits flush. */
+.message-bubble.media-type {
+  padding: 0.4rem;
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
+}
+
+.message-bubble.media-type .message-text {
+  padding: 0.1rem 0.35rem 0;
+}
+
+/* Sticker bubble: transparent, borderless, no padding. */
+.message-bubble.sticker-type {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+}
+
+.message-bubble.sticker-type .message-meta {
+  margin-top: 0.2rem;
+}
+
+[data-theme='dark'] .message-bubble.sticker-type {
+  background: transparent;
+}
+
+/* Revoked / deleted message. */
+.message-bubble.revoked-type {
+  font-style: italic;
+  color: var(--chat-muted);
+}
+
+/* Date separators, centered between message groups. */
 .message-date-separator {
   display: flex;
   align-items: center;
@@ -2581,11 +2587,6 @@
   color: var(--chat-accent);
 }
 
-/* Grouped (consecutive, same-sender) messages sit tighter together. */
-.message-bubble-wrapper.grouped {
-  margin-top: 0.05rem !important;
-}
-
 /* Brief highlight flash when jumping to a message via its reply card. */
 @keyframes message-highlight-flash {
   0% { background-color: rgba(37, 99, 235, 0.22); }
@@ -2597,13 +2598,16 @@
   border-radius: 12px;
 }
 
-.chat-highlight {
-  background: rgba(250, 204, 21, 0.55);
-  color: inherit;
-  border-radius: 3px;
-  padding: 0 1px;
+/* Mobile max-width overrides — kept here as the sole permitted exception after the
+   final section, since .message-bubble-container's base rule above already lives here. */
+@media (max-width: 480px) {
+  .message-bubble-container {
+    max-width: 92%;
+  }
 }
 
-[data-theme='dark'] .chat-highlight {
-  background: rgba(250, 204, 21, 0.35);
+@media (max-width: 360px) {
+  .message-bubble {
+    font-size: 0.76rem;
+  }
 }
