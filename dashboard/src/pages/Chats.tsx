@@ -803,9 +803,13 @@ export function Chats() {
         );
       });
 
-      // Update sidebar chat list (move active chat to the top with the new snippet)
+      // Update sidebar chat list (move active chat to the top with the new snippet). Match on the
+      // composite sessionId + chatId identity — the same contact can exist on multiple channels, so
+      // a chatId-only match could move the wrong session's row to the top.
       setChats(prevChats => {
-        const chatIndex = prevChats.findIndex(c => c.id === activeChat.id);
+        const chatIndex = prevChats.findIndex(
+          c => c.id === activeChat.id && c.sessionId === activeChat.sessionId,
+        );
         if (chatIndex === -1) return prevChats;
         const updatedChats = [...prevChats];
         const target = { ...updatedChats[chatIndex] };
