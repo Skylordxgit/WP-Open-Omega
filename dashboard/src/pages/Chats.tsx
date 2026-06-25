@@ -1,61 +1,58 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import {
   Search,
-  Send,
   Loader2,
-  User,
   Users,
   AlertCircle,
   MessageSquare,
-  Paperclip,
-  Smile,
-  X,
-  CornerUpLeft,
-  Trash2,
   ChevronDown,
   Funnel,
   ArrowUpDown,
   Phone,
   Clock3,
-  Info,
-  MoreVertical,
-  Mic,
-  FileText,
-  Film,
-  Music,
-  Download,
-  Image as ImageIcon,
+  Settings,
 } from 'lucide-react';
 import {
   sessionApi,
   messageApi,
   asMessageType,
   type Session,
-  type Chat,
-  type ChatMessage,
   type MessageType,
 } from '../services/api';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { useRole } from '../hooks/useRole';
 import { useToast } from '../components/Toast';
+import {
+  ChatRow,
+  MessageBubble,
+  DateSeparator,
+  ConversationHeader,
+  Composer,
+  InfoPanel,
+  formatTime,
+  formatChatTime,
+  formatDateSeparator,
+  messageTypeFromMime,
+  type ChatWithSession,
+  type ChatMessageView,
+  type MediaDownloadStatus,
+} from '../components/chats';
 import './Chats.css';
 
-type MessageMedia = { mimetype: string; filename?: string; data?: string };
-
-// A chat as shown in the merged inbox carries the id of the channel (session) it came from, since
-// the same inbox can show chats pulled from several connected WhatsApp accounts at once.
-interface ChatWithSession extends Chat {
-  sessionId: string;
-}
-
-interface ChatMessageView extends ChatMessage {
-  metadata?: {
-    media?: MessageMedia;
-    quotedMessage?: { id: string; body: string };
-    reactions?: Record<string, string>;
-  };
+interface IncomingWsMessage {
+  id: string;
+  chatId: string;
+  from: string;
+  to: string;
+  body: string;
+  type: string;
+  timestamp: number;
+  fromMe?: boolean;
+  media?: { mimetype: string; filename?: string; data?: string };
+  quotedMessage?: { id: string; body: string };
+  metadata?: ChatMessageView['metadata'];
 }
 
 // Delivery acks must only ADVANCE the tick, never regress it. The backend DB update is forward-only
@@ -78,161 +75,8 @@ const mergeDeliveryStatus = (
   return DELIVERY_RANK[incoming] >= DELIVERY_RANK[current] ? incoming : current;
 };
 
-interface IncomingWsMessage {
-  id: string;
-  chatId: string;
-  from: string;
-  to: string;
-  body: string;
-  type: string;
-  timestamp: number;
-  fromMe?: boolean;
-  media?: MessageMedia;
-  quotedMessage?: { id: string; body: string };
-  metadata?: ChatMessageView['metadata'];
-}
-
-// Map an attachment MIME type to the neutral MessageType for the optimistic outgoing bubble, so the
-// placeholder matches what the backend will persist (e.g. a PDF is `document`, not `application`).
-const messageTypeFromMime = (mimetype: string): MessageType => {
-  if (mimetype.startsWith('image/')) return 'image';
-  if (mimetype.startsWith('video/')) return 'video';
-  if (mimetype.startsWith('audio/')) return 'audio';
-  return 'document';
-};
-
-const getMediaSrc = (media?: MessageMedia): string => {
-  if (!media || !media.data) return '';
-  if (media.data.startsWith('data:') || media.data.startsWith('http://') || media.data.startsWith('https://')) {
-    return media.data;
-  }
-  return `data:${media.mimetype};base64,${media.data}`;
-};
-
-// Derive an uppercase file extension from a filename for the document chip badge. Presentation
-// only — does not alter the stored filename or media data.
-const getFileExtension = (filename?: string): string => {
-  if (!filename) return '';
-  const dot = filename.lastIndexOf('.');
-  if (dot <= 0 || dot === filename.length - 1) return '';
-  return filename.slice(dot + 1).toUpperCase();
-};
-
-// If a quoted preview body is a bare media marker like "[image]", return the media kind so the UI
-// can show an icon + readable label instead of literal brackets. Uses only the existing body.
-const getQuotedMediaType = (body?: string): string | null => {
-  if (!body) return null;
-  const match = body.trim().match(/^\[(image|video|audio|voice|document|sticker)\]$/i);
-  return match ? match[1].toLowerCase() : null;
-};
-
-// Turn URLs inside displayed message text into safe new-tab links. This transforms only what is
-// rendered (no innerHTML, no change to the stored/sent body). `pre-wrap` on .message-text keeps
-// the original line breaks in the plain-text segments.
-const URL_PATTERN = /(https?:\/\/[^\s]+)/g;
-const renderTextWithLinks = (text: string): React.ReactNode => {
-  if (!text) return text;
-  return text.split(URL_PATTERN).map((segment, index) =>
-    /^https?:\/\//.test(segment) ? (
-      <a key={index} href={segment} target="_blank" rel="noopener noreferrer">
-        {segment}
-      </a>
-    ) : (
-      segment
-    ),
-  );
-};
-
-// Icon for a quoted media marker (see getQuotedMediaType). Kept here so the renderer stays tidy.
-const QuotedMediaIcon = ({ type }: { type: string }) => {
-  switch (type) {
-    case 'image':
-    case 'sticker':
-      return <ImageIcon size={13} />;
-    case 'video':
-      return <Film size={13} />;
-    case 'audio':
-      return <Music size={13} />;
-    case 'voice':
-      return <Mic size={13} />;
-    case 'document':
-    default:
-      return <FileText size={13} />;
-  }
-};
-
-const QUOTE_MEDIA_LABELS: Record<string, string> = {
-  image: 'Photo',
-  video: 'Video',
-  audio: 'Audio',
-  voice: 'Voice message',
-  document: 'Document',
-  sticker: 'Sticker',
-};
-
-// Message types whose bytes can be downloaded on demand. History media is NOT auto-downloaded;
-// these rows render a placeholder + "Download" action and only fetch when the user clicks.
-const DOWNLOADABLE_MEDIA_TYPES = new Set<string>(['image', 'video', 'audio', 'voice', 'document', 'sticker']);
-
-// WhatsApp-style "<kind> available" labels shown on the not-yet-downloaded media placeholder.
-const MEDIA_AVAILABLE_LABELS: Record<string, string> = {
-  image: 'Image available',
-  video: 'Video available',
-  audio: 'Audio available',
-  voice: 'Voice message available',
-  document: 'Document available',
-  sticker: 'Sticker available',
-};
-
-// Per-message media download status, keyed by message id (absent = idle/not started).
-type MediaDownloadStatus = 'loading' | 'error';
-
-// Placeholder card for a media message whose payload hasn't been downloaded yet. Shows the typed
-// "… available" label plus a Download/Retry button with a loading and error state. Presentational
-// only — the actual fetch is owned by the parent so it can update message state + cache.
-const MediaDownloadPlaceholder = ({
-  type,
-  status,
-  onDownload,
-}: {
-  type: string;
-  status: MediaDownloadStatus | 'idle';
-  onDownload: () => void;
-}) => {
-  const label = MEDIA_AVAILABLE_LABELS[type] || 'Media available';
-  return (
-    <div className={`message-media-placeholder downloadable ${status}`}>
-      <span className="media-placeholder-icon" aria-hidden="true">
-        <QuotedMediaIcon type={type} />
-      </span>
-      <div className="media-placeholder-info">
-        <span className="media-placeholder-label">{label}</span>
-        {status === 'error' && (
-          <span className="media-placeholder-error">Couldn’t load media. Tap to retry.</span>
-        )}
-      </div>
-      <button
-        type="button"
-        className="media-download-btn"
-        onClick={onDownload}
-        disabled={status === 'loading'}
-        aria-label={status === 'error' ? 'Retry media download' : 'Download media'}
-      >
-        {status === 'loading' ? (
-          <>
-            <Loader2 className="animate-spin" size={14} />
-            <span>Loading…</span>
-          </>
-        ) : (
-          <>
-            <Download size={14} />
-            <span>{status === 'error' ? 'Retry' : 'Download'}</span>
-          </>
-        )}
-      </button>
-    </div>
-  );
-};
+// Popular emojis
+const POPULAR_EMOJIS = ['😀', '😂', '👍', '❤️', '🔥', '👏', '🙏', '🎉', '💡', '🤔', '😅', '😍', '😊', '😭', '😎', '😜', '🚀', '✨'];
 
 export function Chats() {
   const { t } = useTranslation();
@@ -274,6 +118,8 @@ export function Chats() {
   // Per-message media download status (on-demand "Load media"). Keyed by message id; an absent
   // entry means idle. History media is never auto-downloaded — only fetched on user click.
   const [mediaDownloads, setMediaDownloads] = useState<Record<string, MediaDownloadStatus>>({});
+  // Briefly highlighted message id (jump-to-quoted-message flash).
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
 
   // Channels whose chat fetch failed on the last load — surfaced non-blockingly in the inbox.
   const [failedChannelIds, setFailedChannelIds] = useState<string[]>([]);
@@ -307,9 +153,6 @@ export function Chats() {
   const chatBottomRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [replyingTo, setReplyingTo] = useState<ChatMessageView | null>(null);
-
-  // Popular emojis
-  const popularEmojis = ['😀', '😂', '👍', '❤️', '🔥', '👏', '🙏', '🎉', '💡', '🤔', '😅', '😍', '😊', '😭', '😎', '😜', '🚀', '✨'];
 
   // 1. Fetch available connected sessions on mount
   useEffect(() => {
@@ -669,75 +512,81 @@ export function Chats() {
     [activeChat, showErrorToast, t],
   );
 
-  const handleReactMessage = async (msg: ChatMessageView, emoji: string) => {
-    if (!activeChat) return;
+  const handleReactMessage = useCallback(
+    async (msg: ChatMessageView, emoji: string) => {
+      if (!activeChat) return;
 
-    const msgId = msg.waMessageId || msg.id;
-    const currentReactions = msg.metadata?.reactions || {};
-    const sessionPhone = sessions.find(s => s.id === activeChat.sessionId)?.phone || 'me';
+      const msgId = msg.waMessageId || msg.id;
+      const currentReactions = msg.metadata?.reactions || {};
+      const sessionPhone = sessions.find(s => s.id === activeChat.sessionId)?.phone || 'me';
 
-    let alreadyReacted = false;
-    for (const [sender, emo] of Object.entries(currentReactions)) {
-      if ((sender === 'me' || sender.includes(sessionPhone)) && emo === emoji) {
-        alreadyReacted = true;
-        break;
+      let alreadyReacted = false;
+      for (const [sender, emo] of Object.entries(currentReactions)) {
+        if ((sender === 'me' || sender.includes(sessionPhone)) && emo === emoji) {
+          alreadyReacted = true;
+          break;
+        }
       }
-    }
 
-    const emojiToSend = alreadyReacted ? '' : emoji;
+      const emojiToSend = alreadyReacted ? '' : emoji;
 
-    try {
-      await messageApi.react(activeChat.sessionId, {
-        chatId: activeChat.id,
-        messageId: msgId,
-        emoji: emojiToSend,
-      });
+      try {
+        await messageApi.react(activeChat.sessionId, {
+          chatId: activeChat.id,
+          messageId: msgId,
+          emoji: emojiToSend,
+        });
 
-      setMessages(prev =>
-        prev.map(m => {
-          if (m.id === msg.id || m.waMessageId === msg.id) {
-            const metadata = m.metadata || {};
-            const reactions = { ...(metadata.reactions || {}) };
-            if (emojiToSend === '') {
-              delete reactions['me'];
-            } else {
-              reactions['me'] = emojiToSend;
+        setMessages(prev =>
+          prev.map(m => {
+            if (m.id === msg.id || m.waMessageId === msg.id) {
+              const metadata = m.metadata || {};
+              const reactions = { ...(metadata.reactions || {}) };
+              if (emojiToSend === '') {
+                delete reactions['me'];
+              } else {
+                reactions['me'] = emojiToSend;
+              }
+              return { ...m, metadata: { ...metadata, reactions } };
             }
-            return { ...m, metadata: { ...metadata, reactions } };
-          }
-          return m;
-        }),
-      );
-    } catch (err) {
-      showErrorToast(t('chats.errors.react'), err instanceof Error ? err.message : undefined);
-    }
-  };
+            return m;
+          }),
+        );
+      } catch (err) {
+        showErrorToast(t('chats.errors.react'), err instanceof Error ? err.message : undefined);
+      }
+    },
+    [activeChat, sessions, t, showErrorToast],
+  );
 
-  const handleDeleteMessage = async (msg: ChatMessageView) => {
-    if (!activeChat) return;
-    const msgId = msg.waMessageId || msg.id;
+  const handleDeleteMessage = useCallback(
+    async (msg: ChatMessageView) => {
+      if (!activeChat) return;
+      const msgId = msg.waMessageId || msg.id;
 
-    if (!window.confirm(t('chats.deleteConfirm'))) return;
+      if (!window.confirm(t('chats.deleteConfirm'))) return;
 
-    try {
-      await messageApi.delete(activeChat.sessionId, {
-        chatId: activeChat.id,
-        messageId: msgId,
-        forEveryone: true,
-      });
+      try {
+        await messageApi.delete(activeChat.sessionId, {
+          chatId: activeChat.id,
+          messageId: msgId,
+          forEveryone: true,
+        });
 
-      setMessages(prev =>
-        prev.map(m => {
-          if (m.id === msg.id || m.waMessageId === msg.id) {
-            return { ...m, body: '', type: 'revoked' };
-          }
-          return m;
-        }),
-      );
-    } catch (err) {
-      showErrorToast(t('chats.errors.delete'), err instanceof Error ? err.message : undefined);
-    }
-  };
+        setMessages(prev =>
+          prev.map(m => {
+            if (m.id === msg.id || m.waMessageId === msg.id) {
+              return { ...m, body: '', type: 'revoked' };
+            }
+            return m;
+          }),
+        );
+      } catch (err) {
+        showErrorToast(t('chats.errors.delete'), err instanceof Error ? err.message : undefined);
+      }
+    },
+    [activeChat, t, showErrorToast],
+  );
 
   useEffect(() => {
     if (activeChat) {
@@ -753,15 +602,17 @@ export function Chats() {
     }
   }, [activeChat, loadMessages]);
 
-  // Esc closes the Chat Info drawer.
+  // Esc closes the Chat Info drawer (or any other open overlay/menu).
   useEffect(() => {
-    if (!showInfo) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setShowInfo(false);
+      if (e.key !== 'Escape') return;
+      if (showInfo) setShowInfo(false);
+      else if (showChannelMenu) setShowChannelMenu(false);
+      else if (showEmojiPicker) setShowEmojiPicker(false);
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [showInfo]);
+  }, [showInfo, showChannelMenu, showEmojiPicker]);
 
   // Drop the drawer if the conversation is cleared (e.g. channel switch).
   useEffect(() => {
@@ -809,6 +660,19 @@ export function Chats() {
     const el = e.currentTarget;
     isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
   };
+
+  // Jump to (and briefly highlight) the original message referenced by a reply card. Scrolling
+  // and the flash are purely presentational — they never trigger a refetch.
+  const handleJumpToQuoted = useCallback((quotedId: string) => {
+    const target = messages.find(m => m.id === quotedId || m.waMessageId === quotedId);
+    if (!target) return;
+    const el = document.getElementById(`msg-${target.id}`);
+    if (!el) return;
+    skipNextAutoScrollRef.current = true;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setHighlightedMessageId(target.id);
+    setTimeout(() => setHighlightedMessageId(curr => (curr === target.id ? null : curr)), 1600);
+  }, [messages]);
 
   // 6. Handle file selection & base64 conversion
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -869,7 +733,7 @@ export function Chats() {
           ? textToSend
           : attachment.filename
         : textToSend,
-      type: attachment ? messageTypeFromMime(attachment.mimetype) : 'text',
+      type: attachment ? (messageTypeFromMime(attachment.mimetype) as MessageType) : 'text',
       direction: 'outgoing',
       status: 'pending',
       createdAt: new Date().toISOString(),
@@ -961,72 +825,93 @@ export function Chats() {
     }
   };
 
-  // Helper formats
-  const formatTime = (timestamp?: number) => {
-    if (!timestamp) return '';
-    return new Date(timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
-
-  const formatLastMessageSnippet = (chat: Chat) => chat.lastMessage || '';
   const totalUnread = chats.reduce((sum, chat) => sum + (chat.unreadCount || 0), 0);
   const directChats = chats.filter(chat => !chat.isGroup).length;
   const groupChats = chats.filter(chat => chat.isGroup).length;
   const activeChatMessageCount = messages.length;
   const activeChatUnread = activeChat?.unreadCount || 0;
 
-  // Stats computed from the loaded messages only (no fetch). Surfaced in the Chat Info drawer.
-  const messageStats = messages.reduce(
-    (acc, m) => {
-      if (m.direction === 'outgoing') acc.outgoing += 1;
-      else acc.incoming += 1;
-      if (m.type !== 'text' && m.type !== 'revoked') acc.media += 1;
-      return acc;
-    },
-    { incoming: 0, outgoing: 0, media: 0 },
+  // Stats computed from the loaded messages only (no fetch). Surfaced in the Chat Info panel.
+  const messageStats = useMemo(
+    () =>
+      messages.reduce(
+        (acc, m) => {
+          if (m.direction === 'outgoing') acc.outgoing += 1;
+          else acc.incoming += 1;
+          if (m.type !== 'text' && m.type !== 'revoked') acc.media += 1;
+          return acc;
+        },
+        { incoming: 0, outgoing: 0, media: 0 },
+      ),
+    [messages],
   );
 
   // Phone number for a 1:1 chat is encoded in the JID (e.g. 1234567890@c.us). Groups have no number.
-  const activeChatPhone =
-    activeChat && !activeChat.isGroup ? activeChat.id.split('@')[0] : '';
+  const activeChatPhone = activeChat && !activeChat.isGroup ? activeChat.id.split('@')[0] : '';
 
   // The channel the active chat actually belongs to (multi-channel safe — not the rail selector).
   const activeChatSession = activeChat ? sessions.find(s => s.id === activeChat.sessionId) || null : null;
   const selectedChannelName = activeChatSession?.name || 'Session';
   const activeChannelPhone = activeChatSession?.phone || '';
 
-  const formatChatTime = (timestamp?: number) => {
-    if (!timestamp) return '';
-    const date = new Date(timestamp * 1000);
-    const today = new Date();
-    if (date.toDateString() === today.toDateString()) {
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    }
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    if (date.toDateString() === yesterday.toDateString()) {
-      return t('chats.yesterday');
-    }
-    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-  };
+  const filteredChats = useMemo(
+    () =>
+      chats
+        .filter(chat => {
+          const query = searchQuery.toLowerCase();
+          const matchesSearch =
+            chat.name?.toLowerCase().includes(query) ||
+            chat.id.toLowerCase().includes(query) ||
+            chat.id.split('@')[0].includes(query);
 
-  const filteredChats = chats
-    .filter(chat => {
-      const matchesSearch =
-        chat.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        chat.id.toLowerCase().includes(searchQuery.toLowerCase());
+          if (!matchesSearch) return false;
+          if (inboxView === 'unread') return (chat.unreadCount || 0) > 0;
+          if (inboxView === 'direct') return !chat.isGroup;
+          if (inboxView === 'groups') return chat.isGroup;
+          return true;
+        })
+        .sort((a, b) => {
+          const aTime = a.timestamp || 0;
+          const bTime = b.timestamp || 0;
+          return sortMode === 'recent' ? bTime - aTime : aTime - bTime;
+        }),
+    [chats, searchQuery, inboxView, sortMode],
+  );
 
-      if (!matchesSearch) return false;
-      if (inboxView === 'unread') return (chat.unreadCount || 0) > 0;
-      if (inboxView === 'direct') return !chat.isGroup;
-      if (inboxView === 'groups') return chat.isGroup;
-      return true;
-    })
-    .sort((a, b) => {
-      const aTime = a.timestamp || 0;
-      const bTime = b.timestamp || 0;
-      return sortMode === 'recent' ? bTime - aTime : aTime - bTime;
+  // Pre-compute per-message grouping (consecutive same-sender runs) and date separators in a single
+  // pass so the render below stays a flat, memoizable list without recomputing this per item.
+  const renderItems = useMemo(() => {
+    const items: Array<
+      | { kind: 'separator'; key: string; label: string }
+      | { kind: 'message'; key: string; msg: ChatMessageView; isGrouped: boolean; showSenderName: boolean }
+    > = [];
+    let lastDateLabel: string | null = null;
+    let lastSenderKey: string | null = null;
+    let lastTimestamp = 0;
+
+    messages.forEach(msg => {
+      const ts = msg.timestamp || Math.floor(new Date(msg.createdAt).getTime() / 1000);
+      const dateLabel = formatDateSeparator(ts, t('chats.today', { defaultValue: 'Today' }), t('chats.yesterday'));
+      if (dateLabel !== lastDateLabel) {
+        items.push({ kind: 'separator', key: `sep-${dateLabel}-${msg.id}`, label: dateLabel });
+        lastDateLabel = dateLabel;
+        lastSenderKey = null; // a new day always starts a fresh group
+      }
+      const senderKey = msg.direction === 'outgoing' ? 'me' : msg.from;
+      // Group consecutive messages from the same sender within a 5-minute window.
+      const isGrouped = senderKey === lastSenderKey && ts - lastTimestamp < 300;
+      items.push({
+        kind: 'message',
+        key: msg.id,
+        msg,
+        isGrouped,
+        showSenderName: !isGrouped && !!activeChat?.isGroup && msg.direction === 'incoming',
+      });
+      lastSenderKey = senderKey;
+      lastTimestamp = ts;
     });
-
+    return items;
+  }, [messages, activeChat, t]);
 
   return (
     <div className="chats-page">
@@ -1109,6 +994,9 @@ export function Chats() {
               </button>
             </nav>
             <div className="chats-iconbar-foot">
+              <button type="button" className="chats-iconbar-btn" title="Settings" aria-label="Settings">
+                <Settings size={18} />
+              </button>
               <span
                 className={`chats-iconbar-dot ${isConnected ? 'online' : 'syncing'}`}
                 title={isConnected ? 'Connected' : 'Reconnecting'}
@@ -1135,6 +1023,7 @@ export function Chats() {
                   type="button"
                   className="chats-inbox-channel"
                   onClick={() => setShowChannelMenu(v => !v)}
+                  aria-expanded={showChannelMenu}
                 >
                   {selectedChannelIds.length === sessions.length
                     ? 'All channels'
@@ -1175,6 +1064,7 @@ export function Chats() {
                   placeholder={t('chats.searchPlaceholder')}
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
+                  aria-label={t('chats.searchPlaceholder')}
                 />
               </div>
               <button
@@ -1232,43 +1122,15 @@ export function Chats() {
                   // accounts, so both the key and the active check combine sessionId + chat.id.
                   const isActive = activeChat?.id === chat.id && activeChat?.sessionId === chat.sessionId;
                   return (
-                    <div
+                    <ChatRow
                       key={`${chat.sessionId}:${chat.id}`}
-                      className={`chat-item-card ${isActive ? 'active' : ''} ${
-                        (chat.unreadCount || 0) > 0 ? 'has-unread' : ''
-                      }`}
-                      onClick={() => setActiveChat(chat)}
-                    >
-                      <div className="chat-avatar">
-                        {chat.isGroup ? <Users size={20} /> : <User size={20} />}
-                      </div>
-
-                      <div className="chat-item-info">
-                        <div className="chat-item-top">
-                          <span className="chat-item-name" title={chat.name || chat.id}>
-                            {chat.name || chat.id.split('@')[0]}
-                          </span>
-                          {chat.timestamp && (
-                            <span className="chat-item-time">{formatChatTime(chat.timestamp)}</span>
-                          )}
-                        </div>
-                        <div className="chat-item-bottom">
-                          <span className="chat-item-snippet" title={formatLastMessageSnippet(chat)}>
-                            {formatLastMessageSnippet(chat) || (
-                              <span className="no-message">{t('chats.noMessageYet')}</span>
-                            )}
-                          </span>
-                          <div className="chat-item-badges">
-                            <span className={`chat-type-badge ${chat.isGroup ? 'group' : 'direct'}`}>
-                              {chat.isGroup ? 'Group' : 'Direct'}
-                            </span>
-                            {chat.unreadCount > 0 && (
-                              <span className="chat-unread-badge">{chat.unreadCount}</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                      chat={chat}
+                      isActive={isActive}
+                      searchQuery={searchQuery}
+                      yesterdayLabel={t('chats.yesterday')}
+                      noMessageLabel={t('chats.noMessageYet')}
+                      onSelect={() => setActiveChat(chat)}
+                    />
                   );
                 })
               )}
@@ -1278,53 +1140,15 @@ export function Chats() {
           <main className="chats-room">
             {activeChat ? (
               <div className="room-container">
-                <header className="room-header">
-                  <div className="room-header-main">
-                    <div className="room-avatar">
-                      {activeChat.isGroup ? <Users size={20} /> : <User size={20} />}
-                    </div>
-                    <div className="room-contact-info">
-                      <h3>{activeChat.name || activeChat.id.split('@')[0]}</h3>
-                      <div className="room-contact-meta">
-                        <span className={isConnected ? 'meta-ok' : 'meta-warn'}>
-                          {isConnected ? 'Connected' : 'Waiting for sync'}
-                        </span>
-                        <span>{activeChat.isGroup ? 'Group' : 'Direct'}</span>
-                        <span>{selectedChannelName}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="room-header-actions">
-                    <button
-                      type="button"
-                      className="room-action-btn"
-                      title="Search conversations"
-                      aria-label="Search conversations"
-                      onClick={() => inboxSearchRef.current?.focus()}
-                    >
-                      <Search size={18} />
-                    </button>
-                    <button
-                      type="button"
-                      className={`room-action-btn ${showInfo ? 'active' : ''}`}
-                      title="Chat info"
-                      aria-label="Chat info"
-                      aria-expanded={showInfo}
-                      onClick={() => setShowInfo(v => !v)}
-                    >
-                      <Info size={18} />
-                    </button>
-                    <button
-                      type="button"
-                      className="room-action-btn"
-                      title="More options"
-                      aria-label="More options"
-                      onClick={() => setShowInfo(true)}
-                    >
-                      <MoreVertical size={18} />
-                    </button>
-                  </div>
-                </header>
+                <ConversationHeader
+                  chat={activeChat}
+                  statusLabel={isConnected ? 'Connected' : 'Waiting for sync'}
+                  statusOk={isConnected}
+                  showInfo={showInfo}
+                  onSearchClick={() => inboxSearchRef.current?.focus()}
+                  onToggleInfo={() => setShowInfo(v => !v)}
+                  onMoreClick={() => setShowInfo(true)}
+                />
 
                 <div className="room-messages" onScroll={handleMessagesScroll}>
                   {!loadingMessages && messages.length > 0 && !reachedOldest && (
@@ -1357,378 +1181,74 @@ export function Chats() {
                       <span>{t('chats.noMessagesInChat')}</span>
                     </div>
                   ) : (
-                    messages.map(msg => {
+                    renderItems.map(item => {
+                      if (item.kind === 'separator') {
+                        return <DateSeparator key={item.key} label={item.label} />;
+                      }
+                      const { msg, isGrouped, showSenderName } = item;
                       const isMe = msg.direction === 'outgoing';
                       const formattedTime = formatTime(
                         msg.timestamp || Math.floor(new Date(msg.createdAt).getTime() / 1000),
                       );
-
-                      const isMediaMessage = msg.type !== 'text';
-                      const mediaInfo = msg.metadata?.media;
-
-                      const renderMedia = () => {
-                        if (msg.type === 'revoked') return null;
-                        if (!mediaInfo) return null;
-                        const mediaSrc = getMediaSrc(mediaInfo);
-                        if (!mediaSrc) return null;
-
-                        switch (msg.type) {
-                          case 'sticker':
-                            return (
-                              <div className="message-media-sticker">
-                                <img
-                                  src={mediaSrc}
-                                  alt={mediaInfo.filename || 'Sticker'}
-                                  className="chat-sticker-media"
-                                />
-                              </div>
-                            );
-                          case 'image':
-                            return (
-                              <div className="message-media-image">
-                                <img
-                                  src={mediaSrc}
-                                  alt={mediaInfo.filename || 'WhatsApp Image'}
-                                  className="chat-image-media"
-                                />
-                              </div>
-                            );
-                          case 'video':
-                            return (
-                              <div className="message-media-video">
-                                <video src={mediaSrc} controls className="chat-video-media" />
-                              </div>
-                            );
-                          case 'voice':
-                            return (
-                              <div className="message-media-voice">
-                                <span className="voice-mic" aria-hidden="true">
-                                  <Mic size={16} />
-                                </span>
-                                <audio src={mediaSrc} controls className="chat-audio-media" />
-                              </div>
-                            );
-                          case 'audio':
-                            return (
-                              <div className="message-media-audio">
-                                <audio src={mediaSrc} controls className="chat-audio-media" />
-                              </div>
-                            );
-                          case 'document':
-                          default: {
-                            const ext = getFileExtension(mediaInfo.filename);
-                            return (
-                              <div className="message-media-document">
-                                <a
-                                  href={mediaSrc}
-                                  download={mediaInfo.filename || 'document'}
-                                  className="chat-document-media"
-                                >
-                                  <span className="doc-icon">
-                                    <FileText size={20} />
-                                    {ext && <span className="doc-ext">{ext}</span>}
-                                  </span>
-                                  <span className="doc-info">
-                                    <span className="doc-name">
-                                      {mediaInfo.filename || t('chats.downloadDocument')}
-                                    </span>
-                                    <span className="doc-sub">
-                                      {ext ? `${ext} file` : t('chats.downloadDocument')}
-                                    </span>
-                                  </span>
-                                </a>
-                              </div>
-                            );
-                          }
-                        }
-                      };
-
-                      const reactions = msg.metadata?.reactions || {};
-                      const hasReactions = Object.keys(reactions).length > 0;
-                      const isRevoked = msg.type === 'revoked';
-                      const quotedBody = msg.metadata?.quotedMessage?.body;
-                      const quotedMediaType = getQuotedMediaType(quotedBody);
-
                       return (
-                        <div
-                          key={msg.id}
-                          className={`message-bubble-wrapper ${isMe ? 'outgoing' : 'incoming'}`}
-                        >
-                          <div className="message-bubble-container">
-                            <div
-                              className={`message-bubble ${isMe ? 'outgoing' : 'incoming'} ${msg.status} ${
-                                isMediaMessage ? 'media-type' : ''
-                              } ${msg.type === 'sticker' ? 'sticker-type' : ''} ${
-                                isRevoked ? 'revoked-type' : ''
-                              }`}
-                            >
-                              {/* Quoted message display */}
-                              {msg.metadata?.quotedMessage && (
-                                <div className="message-quote-box">
-                                  {quotedMediaType ? (
-                                    <div className="quote-media-label">
-                                      <QuotedMediaIcon type={quotedMediaType} />
-                                      <span>{QUOTE_MEDIA_LABELS[quotedMediaType] || quotedMediaType}</span>
-                                    </div>
-                                  ) : (
-                                    <div className="quote-body">{quotedBody}</div>
-                                  )}
-                                </div>
-                              )}
-
-                              {(() => {
-                                if (isRevoked) {
-                                  return <div className="message-text">{t('chats.messageDeleted')}</div>;
-                                }
-
-                                const renderedMedia = renderMedia();
-                                const hasTextBody =
-                                  !!msg.body && (!mediaInfo || msg.body !== mediaInfo.filename);
-                                // A downloadable media type whose bytes aren't loaded yet: show the
-                                // WhatsApp-style placeholder + Download action. Never auto-download.
-                                const needsMediaDownload =
-                                  !renderedMedia && DOWNLOADABLE_MEDIA_TYPES.has(msg.type);
-
-                                if (renderedMedia || needsMediaDownload || hasTextBody) {
-                                  return (
-                                    <>
-                                      {renderedMedia}
-                                      {needsMediaDownload && (
-                                        <MediaDownloadPlaceholder
-                                          type={msg.type}
-                                          status={mediaDownloads[msg.id] ?? 'idle'}
-                                          onDownload={() => void handleDownloadMedia(msg)}
-                                        />
-                                      )}
-                                      {hasTextBody && (
-                                        <div className="message-text">{renderTextWithLinks(msg.body)}</div>
-                                      )}
-                                    </>
-                                  );
-                                }
-                                // A non-text type with no renderable media and no body (e.g. an empty
-                                // location/contact/unknown): still show its kind, never "unsupported".
-                                if (isMediaMessage) {
-                                  const label =
-                                    QUOTE_MEDIA_LABELS[msg.type] ||
-                                    t('chats.mediaMessage', { defaultValue: 'Media message' });
-                                  return (
-                                    <div className="message-media-placeholder">
-                                      <QuotedMediaIcon type={msg.type} />
-                                      <span>{label}</span>
-                                    </div>
-                                  );
-                                }
-                                // Truly nothing to show: no media, no text, unknown type.
-                                return (
-                                  <div className="message-text message-unsupported">
-                                    {t('chats.unsupportedMessage', { defaultValue: 'Unsupported message type' })}
-                                  </div>
-                                );
-                              })()}
-
-                              <div className="message-meta">
-                                <span className="message-time">{formattedTime}</span>
-                                {isMe && (
-                                  <span className={`message-status-icon ${msg.status}`}>
-                                    {msg.status === 'pending' && '🕒'}
-                                    {msg.status === 'sent' && '✓'}
-                                    {msg.status === 'delivered' && '✓✓'}
-                                    {msg.status === 'read' && '✓✓'}
-                                    {msg.status === 'failed' && '⚠️'}
-                                  </span>
-                                )}
-                              </div>
-
-                              {/* Reactions display */}
-                              {hasReactions && (
-                                <div className="message-reactions-badge">
-                                  {Object.values(reactions)
-                                    .slice(0, 3)
-                                    .map((emoji, idx) => (
-                                      <span key={idx} className="reaction-emoji-span">
-                                        {emoji}
-                                      </span>
-                                    ))}
-                                  {Object.keys(reactions).length > 1 && (
-                                    <span className="reactions-count-span">
-                                      {Object.keys(reactions).length}
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Message actions menu (hover) */}
-                            {!isRevoked && (
-                              <div className="message-actions-menu">
-                                <button
-                                  type="button"
-                                  className="action-btn"
-                                  onClick={() => setReplyingTo(msg)}
-                                  title={t('chats.actions.reply')}
-                                >
-                                  <CornerUpLeft size={14} />
-                                </button>
-
-                                <div className="reaction-trigger-wrapper">
-                                  <button
-                                    type="button"
-                                    className="action-btn reaction-btn"
-                                    title={t('chats.actions.react')}
-                                  >
-                                    <Smile size={14} />
-                                  </button>
-                                  <div className="reaction-quick-popover">
-                                    {['👍', '❤️', '😂', '😮', '😢', '🙏'].map(emoji => (
-                                      <button
-                                        key={emoji}
-                                        type="button"
-                                        onClick={() => handleReactMessage(msg, emoji)}
-                                      >
-                                        {emoji}
-                                      </button>
-                                    ))}
-                                  </div>
-                                </div>
-
-                                {isMe && msg.status !== 'pending' && (
-                                  <button
-                                    type="button"
-                                    className="action-btn delete-btn"
-                                    onClick={() => handleDeleteMessage(msg)}
-                                    title={t('chats.actions.delete')}
-                                  >
-                                    <Trash2 size={14} />
-                                  </button>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </div>
+                        <MessageBubble
+                          key={item.key}
+                          msg={msg}
+                          isMe={isMe}
+                          formattedTime={formattedTime}
+                          showSenderName={showSenderName}
+                          senderLabel={msg.from}
+                          isGrouped={isGrouped}
+                          isHighlighted={highlightedMessageId === msg.id}
+                          mediaDownloadStatus={mediaDownloads[msg.id] ?? 'idle'}
+                          unsupportedLabel={t('chats.unsupportedMessage', { defaultValue: 'Unsupported message type' })}
+                          mediaMessageLabel={t('chats.mediaMessage', { defaultValue: 'Media message' })}
+                          deletedLabel={t('chats.messageDeleted')}
+                          downloadDocumentLabel={t('chats.downloadDocument')}
+                          onDownloadMedia={() => void handleDownloadMedia(msg)}
+                          onReply={() => setReplyingTo(msg)}
+                          onReact={emoji => void handleReactMessage(msg, emoji)}
+                          onDelete={() => void handleDeleteMessage(msg)}
+                          onJumpToQuoted={handleJumpToQuoted}
+                          replyLabel={t('chats.actions.reply')}
+                          reactLabel={t('chats.actions.react')}
+                          deleteLabel={t('chats.actions.delete')}
+                        />
                       );
                     })
                   )}
                   <div ref={chatBottomRef} />
                 </div>
 
-                {/* Attachment preview banner */}
-                {attachment && (
-                  <div className="attachment-preview-banner">
-                    {previewUrl ? (
-                      <img src={previewUrl} alt={attachment.filename} className="preview-thumbnail" />
-                    ) : (
-                      <div className="preview-file-icon">📎</div>
-                    )}
-                    <div className="preview-file-info">
-                      <span className="preview-filename">{attachment.filename}</span>
-                      <span className="preview-filesize">({(attachment.file.size / 1024).toFixed(1)} KB)</span>
-                    </div>
-                    <button className="btn-remove-attachment" onClick={handleRemoveAttachment}>
-                      <X size={18} />
-                    </button>
-                  </div>
-                )}
-
-                {/* Popular emojis panel */}
-                {showEmojiPicker && (
-                  <div className="chats-emoji-picker">
-                    <div className="emoji-grid">
-                      {popularEmojis.map(emoji => (
-                        <button
-                          key={emoji}
-                          type="button"
-                          className="emoji-btn"
-                          onClick={() => handleEmojiClick(emoji)}
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Replying preview banner */}
-                {replyingTo && (
-                  <div className="replying-preview-banner">
-                    <div className="replying-preview-content">
-                      <div className="replying-to-title">
-                        {t('chats.replyingTo', {
-                          name:
-                            replyingTo.direction === 'outgoing'
-                              ? t('chats.you')
-                              : activeChat.name || activeChat.id.split('@')[0],
-                        })}
-                      </div>
-                      <div className="replying-to-body">
-                        {replyingTo.type !== 'text' ? `[${replyingTo.type}]` : replyingTo.body}
-                      </div>
-                    </div>
-                    <button className="btn-close-reply" onClick={() => setReplyingTo(null)}>
-                      <X size={18} />
-                    </button>
-                  </div>
-                )}
-
-                {/* Message input bar */}
-                <footer className="room-input-footer">
-                  <form onSubmit={handleSend} className="input-form">
-                    <input type="file" ref={fileInputRef} onChange={handleFileChange} style={{ display: 'none' }} />
-
-                    <button
-                      type="button"
-                      onClick={triggerFileSelect}
-                      disabled={!canWrite || sending}
-                      className="btn-input-accessory"
-                      title={t('chats.attachTitle')}
-                    >
-                      <Paperclip size={20} />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                      disabled={!canWrite || sending}
-                      className={`btn-input-accessory ${showEmojiPicker ? 'active' : ''}`}
-                      title={t('chats.emojiTitle')}
-                    >
-                      <Smile size={20} />
-                    </button>
-
-                    <input
-                      type="text"
-                      placeholder={
-                        canWrite
-                          ? attachment
-                            ? t('chats.captionPlaceholder')
-                            : t('chats.messagePlaceholder')
-                          : t('chats.noPermission')
-                      }
-                      value={messageInput}
-                      onChange={e => setMessageInput(e.target.value)}
-                      disabled={!canWrite || sending}
-                      className="message-text-input"
-                    />
-                    {/* Presentational placeholder for future voice messages — always disabled, no handler. */}
-                    <button
-                      type="button"
-                      disabled
-                      className="btn-input-accessory btn-mic-future"
-                      title="Voice messages — coming soon"
-                      aria-label="Voice message (coming soon)"
-                    >
-                      <Mic size={20} />
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={!canWrite || (!messageInput.trim() && !attachment) || sending}
-                      className="btn-send-message"
-                      aria-label={t('chats.send')}
-                    >
-                      {sending ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />}
-                    </button>
-                  </form>
-                </footer>
+                <Composer
+                  canWrite={canWrite}
+                  sending={sending}
+                  messageInput={messageInput}
+                  attachment={attachment}
+                  previewUrl={previewUrl}
+                  showEmojiPicker={showEmojiPicker}
+                  replyingTo={replyingTo}
+                  replyingToTitle={t('chats.replyingTo', {
+                    name: replyingTo?.direction === 'outgoing' ? t('chats.you') : activeChat.name || activeChat.id.split('@')[0],
+                  })}
+                  replyingToBody={replyingTo ? (replyingTo.type !== 'text' ? `[${replyingTo.type}]` : replyingTo.body) : ''}
+                  popularEmojis={POPULAR_EMOJIS}
+                  attachTitle={t('chats.attachTitle')}
+                  emojiTitle={t('chats.emojiTitle')}
+                  messagePlaceholder={t('chats.messagePlaceholder')}
+                  captionPlaceholder={t('chats.captionPlaceholder')}
+                  noPermissionPlaceholder={t('chats.noPermission')}
+                  sendLabel={t('chats.send')}
+                  onMessageInputChange={setMessageInput}
+                  onSend={handleSend}
+                  onTriggerFileSelect={triggerFileSelect}
+                  onFileChange={handleFileChange}
+                  onRemoveAttachment={handleRemoveAttachment}
+                  onToggleEmojiPicker={() => setShowEmojiPicker(v => !v)}
+                  onEmojiClick={handleEmojiClick}
+                  onCloseReply={() => setReplyingTo(null)}
+                  fileInputRef={fileInputRef}
+                />
               </div>
             ) : (
               <div className="chats-room-placeholder">
@@ -1754,110 +1274,24 @@ export function Chats() {
           {/* Chat Info — persistent right column on desktop, slide-over on tablet/mobile.
               Built entirely from in-memory data (no fetching). */}
           {showInfo && activeChat && (
-            <>
-              <div className="chat-info-scrim" onClick={() => setShowInfo(false)} aria-hidden="true" />
-              <aside className="chat-info-panel" role="complementary" aria-label="Chat info">
-                <div className="chat-info-header">
-                  <span className="chat-info-title">Chat info</span>
-                  <button
-                    type="button"
-                    className="chat-info-close"
-                    onClick={() => setShowInfo(false)}
-                    aria-label="Close chat info"
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
-
-                <div className="chat-info-body">
-                  <div className="chat-info-identity">
-                    <div className="chat-info-avatar">
-                      {activeChat.isGroup ? <Users size={26} /> : <User size={26} />}
-                    </div>
-                    <div className="chat-info-name">{activeChat.name || activeChat.id.split('@')[0]}</div>
-                    <span className={`chat-info-type ${activeChat.isGroup ? 'group' : 'direct'}`}>
-                      {activeChat.isGroup ? 'Group chat' : 'Direct chat'}
-                    </span>
-                  </div>
-
-                  <div className="chat-info-section">
-                    <div className="chat-info-section-title">Details</div>
-                    <div className="chat-info-row">
-                      <span>Chat ID</span>
-                      <strong className="mono" title={activeChat.id}>{activeChat.id}</strong>
-                    </div>
-                    {!activeChat.isGroup && (
-                      <div className="chat-info-row">
-                        <span>Phone number</span>
-                        <strong className="mono">{activeChatPhone || '—'}</strong>
-                      </div>
-                    )}
-                    <div className="chat-info-row">
-                      <span>Type</span>
-                      <strong>{activeChat.isGroup ? 'Group' : 'Direct'}</strong>
-                    </div>
-                    <div className="chat-info-row">
-                      <span>Last activity</span>
-                      <strong>{activeChat.timestamp ? formatChatTime(activeChat.timestamp) : '—'}</strong>
-                    </div>
-                    <div className="chat-info-row">
-                      <span>Unread</span>
-                      <strong>{activeChatUnread}</strong>
-                    </div>
-                  </div>
-
-                  <div className="chat-info-section">
-                    <div className="chat-info-section-title">Channel</div>
-                    <div className="chat-info-row">
-                      <span>Session</span>
-                      <strong>{selectedChannelName}</strong>
-                    </div>
-                    <div className="chat-info-row">
-                      <span>Session phone</span>
-                      <strong className="mono">{activeChannelPhone || t('chats.noPhone')}</strong>
-                    </div>
-                    <div className="chat-info-row">
-                      <span>Connection</span>
-                      <strong className={isConnected ? 'ok' : 'warn'}>
-                        {isConnected ? 'Connected' : 'Reconnecting'}
-                      </strong>
-                    </div>
-                  </div>
-
-                  <div className="chat-info-section">
-                    <div className="chat-info-section-title">Messages</div>
-                    <div className="chat-info-stats">
-                      <div className="chat-info-stat">
-                        <strong>{activeChatMessageCount}</strong>
-                        <span>Loaded</span>
-                      </div>
-                      <div className="chat-info-stat">
-                        <strong>{Math.max(messagesTotal, activeChatMessageCount)}</strong>
-                        <span>Total</span>
-                      </div>
-                      <div className="chat-info-stat">
-                        <strong>{messageStats.incoming}</strong>
-                        <span>Incoming</span>
-                      </div>
-                      <div className="chat-info-stat">
-                        <strong>{messageStats.outgoing}</strong>
-                        <span>Outgoing</span>
-                      </div>
-                      <div className="chat-info-stat">
-                        <strong>{messageStats.media}</strong>
-                        <span>Media</span>
-                      </div>
-                    </div>
-                    <div className="chat-info-note">Stats reflect loaded messages only.</div>
-                  </div>
-
-                  <div className="chat-info-section">
-                    <div className="chat-info-section-title">Labels</div>
-                    <div className="chat-info-empty">Labels are not available yet.</div>
-                  </div>
-                </div>
-              </aside>
-            </>
+            <InfoPanel
+              chat={activeChat}
+              phone={activeChatPhone}
+              channelName={selectedChannelName}
+              channelPhone={activeChannelPhone}
+              isConnected={isConnected}
+              connectedLabel="Connected"
+              reconnectingLabel="Reconnecting"
+              lastActivityLabel={activeChat.timestamp ? formatChatTime(activeChat.timestamp, t('chats.yesterday')) : ''}
+              unreadCount={activeChatUnread}
+              loadedCount={activeChatMessageCount}
+              totalCount={messagesTotal}
+              incomingCount={messageStats.incoming}
+              outgoingCount={messageStats.outgoing}
+              mediaCount={messageStats.media}
+              noPhoneLabel={t('chats.noPhone')}
+              onClose={() => setShowInfo(false)}
+            />
           )}
         </div>
       )}
