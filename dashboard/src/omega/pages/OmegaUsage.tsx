@@ -4,7 +4,17 @@ import { omegaApi } from '../api';
 export function OmegaUsage() {
   const { data, isLoading, error } = useQuery({ queryKey: ['omega-usage'], queryFn: omegaApi.usage });
 
-  if (isLoading) return <div className="omega-card">Loading usage overview...</div>;
+  if (isLoading)
+    return (
+      <div className="omega-card" aria-busy="true" aria-label="Loading">
+        <div className="skeleton-list">
+          <div className="skeleton skeleton-row" />
+          <div className="skeleton skeleton-row" />
+          <div className="skeleton skeleton-row" />
+          <div className="skeleton skeleton-row" />
+        </div>
+      </div>
+    );
   if (error) return <div className="omega-inline-error">{(error as Error).message}</div>;
 
   return (

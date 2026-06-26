@@ -18,20 +18,30 @@
 }
 
 .login-card {
-  background: rgba(255, 255, 255, 0.96);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-lg);
-  border: 1px solid rgba(255, 255, 255, 0.65);
+  background: rgba(255, 255, 255, 0.82);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
+  backdrop-filter: blur(28px) saturate(150%);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-float);
+  border: 1px solid rgba(255, 255, 255, 0.6);
   padding: 3rem;
   width: 100%;
   max-width: 420px;
   text-align: center;
 }
 
-[data-theme='dark'] .login-card,
-:root:not([data-theme='light']) .login-card {
-  background: rgba(18, 29, 44, 0.92);
-  border-color: rgba(121, 145, 170, 0.2);
+/* Dark card only in real dark mode (explicit toggle or OS preference). Previously this also matched
+   the theme-unset case in a LIGHT OS, painting a dark card behind dark text — the faint title bug. */
+[data-theme='dark'] .login-card {
+  background: rgba(17, 27, 41, 0.78);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .login-card {
+    background: rgba(17, 27, 41, 0.78);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
 }
 
 .login-logo {
@@ -90,7 +100,8 @@
 
 .login-title {
   font-size: 1.75rem;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   color: var(--text-primary);
   margin: 0 0 0.5rem;
 }
@@ -175,15 +186,21 @@
   font-size: 1rem;
   font-weight: 600;
   color: white;
-  background: linear-gradient(135deg, var(--primary) 0%, #18a64e 100%);
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
   border: none;
   border-radius: var(--radius);
   cursor: pointer;
-  transition: background 0.2s;
+  box-shadow: 0 12px 26px -10px var(--primary-border);
+  transition:
+    transform 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.2s ease,
+    filter 0.2s ease;
 }
 
 .connect-btn:hover:not(:disabled) {
-  background: var(--primary-hover);
+  transform: translateY(-1px);
+  filter: brightness(1.04);
+  box-shadow: 0 16px 32px -10px var(--primary-border);
 }
 
 .connect-btn:disabled {

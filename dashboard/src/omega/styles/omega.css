@@ -147,17 +147,30 @@
 .omega-stat-card,
 .omega-card,
 .omega-login-card {
-  background: var(--bg-white);
+  background:
+    linear-gradient(180deg, var(--glass-highlight, rgba(255, 255, 255, 0.5)), transparent 36%),
+    var(--bg-white);
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
-  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(var(--glass-blur, 18px));
+  backdrop-filter: blur(var(--glass-blur, 18px));
 }
 
 .omega-stat-card {
-  padding: 1.2rem 1.25rem;
+  padding: 1.4rem 1.45rem;
   display: grid;
   gap: 0.55rem;
+  transition:
+    transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.22s ease,
+    border-color 0.22s ease;
+}
+
+.omega-stat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--primary-border);
 }
 
 .omega-stat-card span,
@@ -191,8 +204,30 @@
 .omega-form input,
 .omega-form select,
 .omega-form textarea {
-  border-radius: 14px;
+  border-radius: var(--radius);
   font: inherit;
+}
+
+/* Lift on hover for the link-style primary button (anchor variants miss the global button rule). */
+.omega-primary-button,
+.omega-ghost-button {
+  transition:
+    transform 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.2s ease,
+    filter 0.2s ease;
+}
+
+.omega-primary-button:hover,
+.omega-ghost-button:hover {
+  transform: translateY(-1px);
+}
+
+.omega-form input:focus,
+.omega-form select:focus,
+.omega-form textarea:focus {
+  outline: none;
+  border-color: var(--primary-border);
+  box-shadow: 0 0 0 4px var(--primary-soft);
 }
 
 .omega-primary-button,
@@ -270,18 +305,36 @@
   display: grid;
   gap: 1rem;
   align-items: center;
-  padding: 0.85rem 0;
+  padding: 0.85rem 0.9rem;
 }
 
 .omega-table-head {
-  font-size: 0.85rem;
+  font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  border-bottom: 1px solid var(--border);
+  background: var(--bg-light);
+  border-radius: var(--radius-sm);
+  margin-bottom: 0.2rem;
 }
 
+/* Floating rows: lift on hover instead of a flat divider list. */
 .omega-table-row {
-  border-bottom: 1px solid var(--border);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.omega-table-row + .omega-table-row {
+  margin-top: 0.1rem;
+}
+
+.omega-table-row:hover {
+  background: var(--bg-white);
+  border-color: var(--border);
+  box-shadow: var(--shadow-sm);
 }
 
 .omega-table-head-clients {
@@ -368,7 +421,9 @@
 .omega-modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.48);
+  background: rgba(8, 13, 22, 0.42);
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
+  backdrop-filter: blur(10px) saturate(120%);
   display: grid;
   place-items: center;
   padding: 1.5rem;
@@ -379,11 +434,13 @@
   width: min(860px, 100%);
   max-height: 90vh;
   overflow: auto;
-  border-radius: 18px;
-  background: var(--bg-white);
-  border: 1px solid var(--border);
-  padding: 1.25rem;
-  box-shadow: var(--shadow-lg);
+  border-radius: var(--radius-lg);
+  background: var(--glass-bg-strong, var(--bg-white));
+  -webkit-backdrop-filter: blur(var(--glass-blur, 22px)) saturate(140%);
+  backdrop-filter: blur(var(--glass-blur, 22px)) saturate(140%);
+  border: 1px solid var(--glass-border, var(--border));
+  padding: 1.5rem;
+  box-shadow: var(--shadow-float);
 }
 
 .omega-card-flat {
@@ -432,10 +489,21 @@
 }
 
 .omega-plan-card {
-  padding: 1rem;
-  border-radius: 18px;
+  padding: 1.25rem;
+  border-radius: var(--radius-lg);
   background: linear-gradient(180deg, var(--bg-white), var(--bg-light));
   border: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
+  transition:
+    transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.22s ease,
+    border-color 0.22s ease;
+}
+
+.omega-plan-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--primary-border);
 }
 
 .omega-definition-list div {

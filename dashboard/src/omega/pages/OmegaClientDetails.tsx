@@ -8,7 +8,17 @@ export function OmegaClientDetails() {
   const { data: sessions = [] } = useQuery({ queryKey: ['omega-client-sessions', id], queryFn: () => omegaApi.clientSessions(id) });
   const { data: usage } = useQuery({ queryKey: ['omega-client-usage', id], queryFn: () => omegaApi.clientUsage(id) });
 
-  if (isLoading) return <div className="omega-card">Loading client details...</div>;
+  if (isLoading)
+    return (
+      <div className="omega-card" aria-busy="true" aria-label="Loading">
+        <div className="skeleton-list">
+          <div className="skeleton skeleton-row" />
+          <div className="skeleton skeleton-row" />
+          <div className="skeleton skeleton-row" />
+          <div className="skeleton skeleton-row" />
+        </div>
+      </div>
+    );
   if (error) return <div className="omega-inline-error">{(error as Error).message}</div>;
 
   return (
