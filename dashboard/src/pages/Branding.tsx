@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Image as ImageIcon, Palette, Globe, Sparkles, RotateCcw, Upload, Save } from 'lucide-react';
 import { brandingApi, type BrandingSettings, type BrandingUploadKind } from '../services/api';
 import { useBranding } from '../hooks/useBranding';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { useToast } from '../components/Toast';
 import { PageHeader } from '../components/PageHeader';
 import './Branding.css';
@@ -29,6 +30,7 @@ const MAX_UPLOAD_MB = 2;
 
 export function Branding() {
   const { branding, refresh } = useBranding();
+  useDocumentTitle('Branding');
   const toast = useToast();
 
   const [form, setForm] = useState<FormState>(() => toFormState(branding));

@@ -46,8 +46,17 @@ function applyColorTokens(branding: BrandingSettings) {
   root.setProperty('--sidebar-active-border', hexToRgba(branding.primaryColor, 0.42));
 }
 
+/**
+ * Single source of truth for the browser tab title.
+ * Prefers the configured browser tab title, falls back to the app name, and
+ * finally to the built-in default — never a stray hardcoded string elsewhere.
+ */
+export function resolveBrowserTitle(branding: BrandingSettings): string {
+  return branding.browserTitle?.trim() || branding.appName?.trim() || DEFAULT_BRANDING.browserTitle;
+}
+
 function applyBrowserChrome(branding: BrandingSettings) {
-  document.title = branding.browserTitle || DEFAULT_BRANDING.browserTitle;
+  document.title = resolveBrowserTitle(branding);
 
   let favicon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
   if (!favicon) {
