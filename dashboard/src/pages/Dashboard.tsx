@@ -1,158 +1,383 @@
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { MessageSquare, Send, Webhook, Activity, ArrowUpRight, ArrowDownRight, Loader2 } from 'lucide-react';
+import {
+  MessageSquare,
+  Send,
+  Inbox,
+  Reply,
+  Megaphone,
+  MessagesSquare,
+  MailWarning,
+  AlertTriangle,
+  Timer,
+  Percent,
+  Image as ImageIcon,
+  Trophy,
+  Loader2,
+  ArrowDownLeft,
+  ArrowUpRight,
+  Info,
+} from 'lucide-react';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
-import { useSessionsQuery, useSessionStatsQuery, useWebhooksQuery, useStopSessionMutation } from '../hooks/queries';
+import { useDashboardAnalyticsQuery } from '../hooks/queries';
+import type { DashboardAnalytics, MetricAvailability } from '../services/api';
 import { PageHeader } from '../components/PageHeader';
 import './Dashboard.css';
+
+// ── Formatting helpers ────────────────────────────────────────────────
+
+function shortChat(chatId: string): string {
+  return chatId.replace(/@(c|g|s)\.(us|whatsapp\.net)$/i, '').replace(/@g\.us$/i, '');
+}
+
+function formatDuration(seconds: number | null): string {
+  if (seconds === null) return '—';
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)}m ${seconds % 60}s`;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.round((seconds % 3600) / 60);
+  return `${h}h ${m}m`;
+}
+
+function formatTime(iso: string): string {
+  const d = new Date(iso);
+  const diff = Date.now() - d.getTime();
+  if (diff < 60000) return 'just now';
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+  return d.toLocaleString();
+}
+
+function metricDisplay(m: MetricAvailability<number>, format: (v: number) => string): { text: string; note?: string } {
+  if (!m.available || m.value === null) return { text: 'Not available', note: m.note };
+  return { text: format(m.value) };
+}
+
+// ── KPI card ──────────────────────────────────────────────────────────
+
+interface KpiCardProps {
+  label: string;
+  value: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  sub?: string;
+  unavailable?: boolean;
+  note?: string;
+  accent?: 'primary' | 'incoming' | 'outgoing' | 'warning' | 'danger';
+}
+
+function KpiCard({ label, value, icon: Icon, sub, unavailable, note, accent = 'primary' }: KpiCardProps) {
+  return (
+    <div className={`kpi-card kpi-${accent}${unavailable ? ' kpi-unavailable' : ''}`}>
+      <div className="kpi-head">
+        <span className="kpi-label">{label}</span>
+        <span className="kpi-icon">
+          <Icon size={18} />
+        </span>
+      </div>
+      <div className="kpi-value">{value}</div>
+      {sub && <div className="kpi-sub">{sub}</div>}
+      {unavailable && note && (
+        <div className="kpi-note" title={note}>
+          <Info size={12} /> Why?
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Hourly chart (grouped bars, CSS/SVG-free) ─────────────────────────
+
+function HourlyChart({ data }: { data: DashboardAnalytics['hourly'] }) {
+  const max = Math.max(1, ...data.map(d => Math.max(d.incoming, d.outgoing)));
+  const hasData = data.some(d => d.incoming > 0 || d.outgoing > 0);
+  if (!hasData) {
+    return <div className="empty-state-inline">No messages recorded today yet.</div>;
+  }
+  return (
+    <div className="hourly-chart">
+      <div className="hourly-bars">
+        {data.map(d => (
+          <div className="hourly-col" key={d.hour} title={`${String(d.hour).padStart(2, '0')}:00 — ${d.incoming} in / ${d.outgoing} out`}>
+            <div className="hourly-stack">
+              <div className="hourly-bar in" style={{ height: `${(d.incoming / max) * 100}%` }} />
+              <div className="hourly-bar out" style={{ height: `${(d.outgoing / max) * 100}%` }} />
+            </div>
+            {d.hour % 3 === 0 && <span className="hourly-label">{String(d.hour).padStart(2, '0')}</span>}
+          </div>
+        ))}
+      </div>
+      <div className="chart-legend">
+        <span><i className="dot in" /> Incoming</span>
+        <span><i className="dot out" /> Outgoing</span>
+      </div>
+    </div>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────
 
 export function Dashboard() {
   const { t } = useTranslation();
   useDocumentTitle(t('dashboard.title'));
   const navigate = useNavigate();
-  const { data: sessions = [], isLoading: loadingSessions, error: sessionsError } = useSessionsQuery();
-  const { data: stats } = useSessionStatsQuery();
-  const { data: webhooks = [] } = useWebhooksQuery();
-  const stopMutation = useStopSessionMutation();
-  const loading = loadingSessions;
-  const error = sessionsError instanceof Error
-    ? sessionsError.message
-    : sessionsError
-      ? t('dashboard.loadError')
-      : null;
-  const webhookCount = webhooks.length;
+  const { data, isLoading, error } = useDashboardAnalyticsQuery();
 
-  const handleDisconnect = async (id: string) => {
-    try {
-      await stopMutation.mutateAsync(id);
-    } catch (err) {
-      console.error('Failed to disconnect:', err);
-    }
-  };
-
-  const statsCards = [
-    {
-      label: t('dashboard.stats.activeSessions'),
-      value: stats?.active ?? 0,
-      icon: MessageSquare,
-      trend: `+${stats?.ready ?? 0}`,
-      trendUp: true,
-    },
-    { label: t('dashboard.stats.messagesToday'), value: '—', icon: Send, trend: '0', trendUp: null },
-    { label: t('dashboard.stats.webhooksConfigured'), value: webhookCount, icon: Webhook, trend: '0', trendUp: null },
-    { label: t('dashboard.stats.apiCalls'), value: '—', icon: Activity, trend: '0', trendUp: null },
-  ];
-
-  const formatLastActive = (date?: string) => {
-    if (!date) return t('common.never');
-    const diff = Date.now() - new Date(date).getTime();
-    if (diff < 60000) return t('common.justNow');
-    if (diff < 3600000) return t('common.minAgo', { count: Math.floor(diff / 60000) });
-    if (diff < 86400000) return t('common.hoursAgo', { count: Math.floor(diff / 3600000) });
-    return new Date(date).toLocaleDateString();
-  };
-
-  const formatStatus = (status: string) => t(`sessionStatus.${status}`, { defaultValue: status });
-
-  if (loading) {
+  if (isLoading) {
     return (
-      <div
-        className="dashboard"
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '400px' }}
-      >
+      <div className="dashboard" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '400px' }}>
         <Loader2 className="animate-spin" size={32} />
       </div>
     );
   }
 
-  if (error) {
+  if (error || !data) {
     return (
       <div className="dashboard" style={{ padding: '2rem' }}>
-        <div style={{ background: '#FEE2E2', padding: '1rem', borderRadius: '8px', color: '#DC2626' }}>
-          {t('dashboard.errorPrefix', { message: error })}
+        <div className="dashboard-error">
+          {error instanceof Error ? error.message : 'Failed to load dashboard analytics.'}
         </div>
       </div>
     );
   }
 
+  const c = data.cards;
+  const totalMessages = c.incomingToday + c.outgoingToday;
+  const replyRate = metricDisplay(c.replyRate, v => `${Math.round(v * 100)}%`);
+  const avgResponse = metricDisplay(c.avgResponseTimeSec, formatDuration);
+  const unread = metricDisplay(c.unreadChats, v => v.toLocaleString());
+
+  const incVsOut = data.incomingVsOutgoing;
+  const ivoTotal = Math.max(1, incVsOut.incoming + incVsOut.outgoing);
+  const bc = data.broadcast;
+  const bcTotal = Math.max(1, bc.total);
+
   return (
     <div className="dashboard">
       <PageHeader
         title={t('dashboard.title')}
-        subtitle={t('dashboard.subtitle')}
-        badge={
-          <span className={`status-badge ${stats && stats.ready > 0 ? 'connected' : 'disconnected'}`}>
-            {stats && stats.ready > 0 ? t('common.connected') : t('common.disconnected')}
-          </span>
-        }
+        subtitle="Real-time messaging analytics from stored message data."
+        badge={<span className="status-badge connected">Today · {data.date}</span>}
       />
 
-      <div className="stats-grid">
-        {statsCards.map(({ label, value, icon: Icon, trend, trendUp }) => (
-          <div key={label} className="stat-card">
-            <Icon className="stat-watermark" />
-            <div className="stat-header">
-              <span className="stat-label">{label}</span>
-              <Icon size={20} className="stat-icon" />
-            </div>
-            <div className="stat-value">{typeof value === 'number' ? value.toLocaleString() : value}</div>
-            {trend !== '0' && (
-              <div className={`stat-trend ${trendUp ? 'up' : 'down'}`}>
-                {trendUp ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                {trend}
-              </div>
-            )}
-          </div>
-        ))}
+      {/* ── KPI grid ── */}
+      <div className="kpi-grid">
+        <KpiCard label="Active sessions" value={c.activeSessions.toLocaleString()} icon={MessageSquare} />
+        <KpiCard label="Incoming today" value={c.incomingToday.toLocaleString()} icon={Inbox} accent="incoming" />
+        <KpiCard label="Replied chats today" value={c.repliedToday.toLocaleString()} icon={Reply} accent="primary" />
+        <KpiCard label="Outgoing today" value={c.outgoingToday.toLocaleString()} icon={Send} accent="outgoing" />
+        <KpiCard label="Broadcast sent today" value={c.broadcastToday.toLocaleString()} icon={Megaphone} sub={`${bc.batches} batch${bc.batches === 1 ? '' : 'es'}`} />
+        <KpiCard label="Total chats today" value={c.totalChatsToday.toLocaleString()} icon={MessagesSquare} />
+        <KpiCard label="Unread chats" value={unread.text} icon={MailWarning} unavailable={!c.unreadChats.available} note={unread.note} />
+        <KpiCard label="Failed today" value={c.failedToday.toLocaleString()} icon={AlertTriangle} accent={c.failedToday > 0 ? 'danger' : 'primary'} />
+        <KpiCard label="Avg response time" value={avgResponse.text} icon={Timer} unavailable={!c.avgResponseTimeSec.available} note={avgResponse.note} />
+        <KpiCard label="Reply rate" value={replyRate.text} icon={Percent} unavailable={!c.replyRate.available} note={replyRate.note} />
+        <KpiCard label="Media today" value={c.mediaToday.toLocaleString()} icon={ImageIcon} />
+        <KpiCard
+          label="Top active session"
+          value={c.topSession ? c.topSession.name : '—'}
+          icon={Trophy}
+          sub={c.topSession ? `${c.topSession.messageCount.toLocaleString()} messages` : 'No activity today'}
+        />
       </div>
 
-      <section className="sessions-section">
-        <div className="section-header">
-          <h2>{t('dashboard.sessionsOverview')}</h2>
-          <span className="section-subtitle">
-            {t('dashboard.showingSessions', { shown: sessions.length, total: stats?.total ?? 0 })}
-          </span>
-        </div>
-
-        <div className="sessions-table">
-          <div className="table-header">
-            <span>{t('dashboard.columns.sessionId')}</span>
-            <span>{t('dashboard.columns.phone')}</span>
-            <span>{t('dashboard.columns.status')}</span>
-            <span>{t('dashboard.columns.lastActive')}</span>
-            <span>{t('dashboard.columns.actions')}</span>
+      {/* ── Charts row ── */}
+      <div className="charts-row">
+        <section className="panel">
+          <div className="panel-head">
+            <h2>Messages over time</h2>
+            <span className="panel-sub">Hourly · today</span>
           </div>
-          {sessions.length === 0 ? (
-            <div className="table-row" style={{ justifyContent: 'center', color: 'var(--text-muted)' }}>
-              {t('dashboard.noSessions')}
-            </div>
+          <HourlyChart data={data.hourly} />
+        </section>
+
+        <section className="panel">
+          <div className="panel-head">
+            <h2>Incoming vs outgoing</h2>
+            <span className="panel-sub">{totalMessages.toLocaleString()} total</span>
+          </div>
+          {totalMessages === 0 ? (
+            <div className="empty-state-inline">No messages today.</div>
           ) : (
-            sessions.map(session => (
-              <div key={session.id} className="table-row">
-                <div className="session-info-cell">
-                  <span className="session-id">{session.id.substring(0, 12)}</span>
-                  <span className="session-name" title={session.name}>
-                    {session.name}
-                  </span>
+            <div className="ratio-block">
+              <div className="ratio-bar">
+                <div className="ratio-seg in" style={{ width: `${(incVsOut.incoming / ivoTotal) * 100}%` }} />
+                <div className="ratio-seg out" style={{ width: `${(incVsOut.outgoing / ivoTotal) * 100}%` }} />
+              </div>
+              <div className="ratio-legend">
+                <div className="ratio-item">
+                  <span className="ratio-num"><ArrowDownLeft size={16} /> {incVsOut.incoming.toLocaleString()}</span>
+                  <span className="ratio-cap">Incoming ({Math.round((incVsOut.incoming / ivoTotal) * 100)}%)</span>
                 </div>
-                <span className="phone">{session.phone || '—'}</span>
-                <span className={`status-pill ${session.status}`}>{formatStatus(session.status)}</span>
-                <span className="last-active">{formatLastActive(session.lastActive)}</span>
-                <div className="actions">
-                  <button className="btn-sm" onClick={() => navigate('/sessions')}>
-                    {t('dashboard.view')}
-                  </button>
-                  {['ready', 'initializing', 'connecting', 'qr_ready'].includes(session.status) && (
-                    <button className="btn-sm danger" onClick={() => handleDisconnect(session.id)}>
-                      {t('dashboard.disconnect')}
-                    </button>
-                  )}
+                <div className="ratio-item">
+                  <span className="ratio-num"><ArrowUpRight size={16} /> {incVsOut.outgoing.toLocaleString()}</span>
+                  <span className="ratio-cap">Outgoing ({Math.round((incVsOut.outgoing / ivoTotal) * 100)}%)</span>
                 </div>
               </div>
-            ))
+            </div>
           )}
+        </section>
+
+        <section className="panel">
+          <div className="panel-head">
+            <h2>Broadcast delivery</h2>
+            <span className="panel-sub">{bc.batches} batch{bc.batches === 1 ? '' : 'es'} today</span>
+          </div>
+          {bc.total === 0 ? (
+            <div className="empty-state-inline">No broadcast batches today.</div>
+          ) : (
+            <div className="ratio-block">
+              <div className="ratio-bar">
+                <div className="ratio-seg ok" style={{ width: `${(bc.sent / bcTotal) * 100}%` }} />
+                <div className="ratio-seg bad" style={{ width: `${(bc.failed / bcTotal) * 100}%` }} />
+                <div className="ratio-seg wait" style={{ width: `${(bc.pending / bcTotal) * 100}%` }} />
+                <div className="ratio-seg cancel" style={{ width: `${(bc.cancelled / bcTotal) * 100}%` }} />
+              </div>
+              <div className="bc-stats">
+                <div><strong>{bc.sent.toLocaleString()}</strong><span>Sent</span></div>
+                <div><strong>{bc.failed.toLocaleString()}</strong><span>Failed</span></div>
+                <div><strong>{bc.pending.toLocaleString()}</strong><span>Pending</span></div>
+                <div><strong>{bc.cancelled.toLocaleString()}</strong><span>Cancelled</span></div>
+              </div>
+            </div>
+          )}
+        </section>
+      </div>
+
+      {/* ── Session performance ── */}
+      <section className="panel">
+        <div className="panel-head">
+          <h2>Session performance</h2>
+          <span className="panel-sub">Today, by volume</span>
         </div>
+        {data.sessionPerformance.length === 0 ? (
+          <div className="empty-state-inline">No session activity today.</div>
+        ) : (
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Session</th>
+                  <th>Status</th>
+                  <th className="num">Incoming</th>
+                  <th className="num">Outgoing</th>
+                  <th className="num">Chats</th>
+                  <th className="num">Failed</th>
+                  <th className="num">Avg response</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.sessionPerformance.map(s => (
+                  <tr key={s.sessionId} onClick={() => navigate('/sessions')} className="clickable">
+                    <td>{s.name}</td>
+                    <td><span className={`status-pill ${s.status}`}>{s.status}</span></td>
+                    <td className="num">{s.incoming.toLocaleString()}</td>
+                    <td className="num">{s.outgoing.toLocaleString()}</td>
+                    <td className="num">{s.chats.toLocaleString()}</td>
+                    <td className={`num ${s.failed > 0 ? 'danger-text' : ''}`}>{s.failed.toLocaleString()}</td>
+                    <td className="num">{formatDuration(s.avgResponseTimeSec)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
+
+      {/* ── Two-column tables ── */}
+      <div className="tables-row">
+        <section className="panel">
+          <div className="panel-head">
+            <h2>Recent active chats</h2>
+          </div>
+          {data.recentChats.length === 0 ? (
+            <div className="empty-state-inline">No active chats today.</div>
+          ) : (
+            <ul className="list">
+              {data.recentChats.map(ch => (
+                <li key={`${ch.sessionId}-${ch.chatId}`} className="list-row">
+                  <span className={`dir-pill ${ch.lastDirection}`}>
+                    {ch.lastDirection === 'incoming' ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />}
+                  </span>
+                  <div className="list-main">
+                    <span className="list-title">{shortChat(ch.chatId)}</span>
+                    <span className="list-sub">{ch.sessionName} · {ch.messageCount} msg</span>
+                  </div>
+                  <span className="list-time">{formatTime(ch.lastMessageAt)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="panel">
+          <div className="panel-head">
+            <h2>Unreplied chats</h2>
+            <span className="panel-sub">Awaiting agent reply</span>
+          </div>
+          {data.unrepliedChats.length === 0 ? (
+            <div className="empty-state-inline">All incoming chats have been replied to. 🎉</div>
+          ) : (
+            <ul className="list">
+              {data.unrepliedChats.map(ch => (
+                <li key={`${ch.sessionId}-${ch.chatId}`} className="list-row">
+                  <span className="dir-pill incoming"><ArrowDownLeft size={14} /></span>
+                  <div className="list-main">
+                    <span className="list-title">{shortChat(ch.chatId)}</span>
+                    <span className="list-sub">{ch.sessionName} · {ch.incomingCount} incoming</span>
+                  </div>
+                  <span className="list-time warn">waiting {formatDuration(ch.waitingSeconds)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="panel">
+          <div className="panel-head">
+            <h2>Top contacts</h2>
+            <span className="panel-sub">By message count</span>
+          </div>
+          {data.topContacts.length === 0 ? (
+            <div className="empty-state-inline">No contacts today.</div>
+          ) : (
+            <ul className="list">
+              {data.topContacts.map((ct, i) => (
+                <li key={`${ct.sessionId}-${ct.chatId}`} className="list-row">
+                  <span className="rank">{i + 1}</span>
+                  <div className="list-main">
+                    <span className="list-title">{shortChat(ct.chatId)}</span>
+                    <span className="list-sub">{ct.sessionName}</span>
+                  </div>
+                  <span className="list-time">{ct.messageCount.toLocaleString()} msg</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="panel">
+          <div className="panel-head">
+            <h2>Failed message log</h2>
+            <span className="panel-sub">Today</span>
+          </div>
+          {data.failedLog.length === 0 ? (
+            <div className="empty-state-inline">No failed messages today. 🎉</div>
+          ) : (
+            <ul className="list">
+              {data.failedLog.map(f => (
+                <li key={f.id} className="list-row">
+                  <span className="dir-pill failed"><AlertTriangle size={14} /></span>
+                  <div className="list-main">
+                    <span className="list-title">{shortChat(f.chatId)}</span>
+                    <span className="list-sub">{f.error || f.body || `${f.type} message`}</span>
+                  </div>
+                  <span className="list-time">{formatTime(f.createdAt)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

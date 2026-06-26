@@ -26,6 +26,7 @@ import { ChannelModule } from './modules/channel/channel.module';
 import { CacheModule } from './common/cache';
 import { StorageModule } from './common/storage/storage.module';
 import { StatsModule } from './modules/stats/stats.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { MetricsModule } from './modules/metrics/metrics.module';
 import { StatusModule } from './modules/status/status.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
@@ -217,6 +218,7 @@ if (dashboardServingEnabled && dashboardBuildPresent) {
     LabelModule, // Phase 3: Labels Management
     ChannelModule, // Phase 3: Channels/Newsletter
     StatsModule, // Phase 3: Statistics Dashboard
+    DashboardModule, // Messaging analytics dashboard (today's metrics + charts)
     MetricsModule, // Prometheus /api/metrics
     StatusModule, // Phase 3: Status/Stories API
     CatalogModule, // Phase 3: Catalog API (WhatsApp Business)

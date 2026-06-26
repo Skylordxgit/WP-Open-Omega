@@ -749,6 +749,81 @@ export const brandingApi = {
 };
 
 // =============================================================================
+// Dashboard Analytics
+// =============================================================================
+
+/** A metric that may be unavailable given the current DB schema. */
+export interface MetricAvailability<T> {
+  value: T | null;
+  available: boolean;
+  note?: string;
+}
+
+export interface DashboardAnalytics {
+  date: string;
+  generatedAt: string;
+  cards: {
+    activeSessions: number;
+    incomingToday: number;
+    repliedToday: number;
+    outgoingToday: number;
+    broadcastToday: number;
+    totalChatsToday: number;
+    unreadChats: MetricAvailability<number>;
+    failedToday: number;
+    avgResponseTimeSec: MetricAvailability<number>;
+    replyRate: MetricAvailability<number>;
+    mediaToday: number;
+    topSession: { sessionId: string; name: string; messageCount: number } | null;
+  };
+  hourly: Array<{ hour: number; incoming: number; outgoing: number }>;
+  incomingVsOutgoing: { incoming: number; outgoing: number };
+  broadcast: { batches: number; total: number; sent: number; failed: number; pending: number; cancelled: number };
+  sessionPerformance: Array<{
+    sessionId: string;
+    name: string;
+    status: string;
+    incoming: number;
+    outgoing: number;
+    failed: number;
+    chats: number;
+    avgResponseTimeSec: number | null;
+  }>;
+  recentChats: Array<{
+    chatId: string;
+    sessionId: string;
+    sessionName: string;
+    lastMessageAt: string;
+    lastDirection: string;
+    messageCount: number;
+  }>;
+  unrepliedChats: Array<{
+    chatId: string;
+    sessionId: string;
+    sessionName: string;
+    lastIncomingAt: string;
+    waitingSeconds: number;
+    incomingCount: number;
+  }>;
+  failedLog: Array<{
+    id: string;
+    sessionId: string;
+    chatId: string;
+    to: string;
+    type: string;
+    body: string | null;
+    createdAt: string;
+    error: string | null;
+  }>;
+  topContacts: Array<{ chatId: string; sessionId: string; sessionName: string; messageCount: number }>;
+}
+
+export const dashboardApi = {
+  getAnalytics: (date?: string) =>
+    request<DashboardAnalytics>(`/dashboard/analytics${date ? `?date=${encodeURIComponent(date)}` : ''}`),
+};
+
+// =============================================================================
 // Plugin Types
 // =============================================================================
 

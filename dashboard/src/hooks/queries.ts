@@ -7,6 +7,7 @@ import {
   auditApi,
   infraApi,
   pluginsApi,
+  dashboardApi,
   type Webhook,
   type TemplatePayload,
 } from '../services/api';
@@ -26,7 +27,19 @@ export const queryKeys = {
   plugins: ['plugins'] as const,
   engines: ['engines'] as const,
   currentEngine: ['engines', 'current'] as const,
+  dashboardAnalytics: (date?: string) => ['dashboard', 'analytics', date ?? 'today'] as const,
 };
+
+// ── Dashboard Analytics ───────────────────────────────────────────────
+
+export function useDashboardAnalyticsQuery(date?: string) {
+  return useQuery({
+    queryKey: queryKeys.dashboardAnalytics(date),
+    queryFn: () => dashboardApi.getAnalytics(date),
+    staleTime: 20_000,
+    refetchInterval: 60_000,
+  });
+}
 
 // ── Session Queries ───────────────────────────────────────────────────
 
