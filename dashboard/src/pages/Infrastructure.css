@@ -25,12 +25,20 @@
 
 .infra-card {
   background: var(--bg-white);
-  border-radius: var(--radius);
-  padding: 1.5rem;
-  box-shadow: var(--shadow-sm);
+  border-radius: var(--radius-lg);
+  padding: 1.6rem;
+  box-shadow: var(--shadow-md);
   border: 1px solid var(--border);
   width: 100%;
   box-sizing: border-box;
+  transition:
+    transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.22s ease;
+}
+
+.infra-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
 }
 
 .infra-card.full-width {
@@ -118,7 +126,7 @@
 
 .radio-option.selected {
   border-color: var(--primary);
-  background: rgba(37, 211, 102, 0.05);
+  background: var(--bg-light);
 }
 
 .radio-option input {

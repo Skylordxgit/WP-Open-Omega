@@ -92,11 +92,12 @@
 .plugin-card {
   background: var(--bg-white);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
   overflow: hidden;
   transition:
-    transform 0.2s,
-    box-shadow 0.2s;
+    transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.22s;
 }
 
 .plugin-card:hover {

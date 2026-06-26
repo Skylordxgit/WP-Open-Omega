@@ -49,6 +49,21 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-white);
+  box-shadow: var(--shadow-sm);
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.contacts-controls input:focus {
+  outline: none;
+  border-color: var(--primary-border);
+  box-shadow: 0 0 0 4px var(--primary-soft);
+}
+
+.contacts-toolbar-button,
+.contacts-clear-button {
+  box-shadow: var(--shadow-sm);
 }
 
 .contacts-grid {
@@ -58,11 +73,13 @@
 }
 
 .contacts-card {
-  background: var(--bg-white);
+  background:
+    linear-gradient(180deg, var(--glass-highlight, rgba(255, 255, 255, 0.5)), transparent 32%),
+    var(--bg-white);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-sm);
-  padding: 1.5rem;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: 1.6rem;
 }
 
 .contacts-card-header {
@@ -109,8 +126,18 @@
   gap: 1rem;
   padding: 0.875rem 1rem;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   background: var(--bg-light);
+  transition:
+    transform 0.16s ease,
+    background 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.contacts-item:hover {
+  background: var(--bg-white);
+  transform: translateX(2px);
+  box-shadow: var(--shadow-sm);
 }
 
 .contacts-item p {

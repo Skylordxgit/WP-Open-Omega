@@ -19,9 +19,9 @@
 
 .bulk-card {
   background: var(--bg-white);
-  border-radius: var(--radius);
-  padding: 1.5rem;
-  box-shadow: var(--shadow-sm);
+  border-radius: var(--radius-lg);
+  padding: 1.75rem;
+  box-shadow: var(--shadow-md);
   border: 1px solid var(--border);
 }
 

@@ -55,11 +55,20 @@
 
 .webhook-card {
   background: var(--bg-white);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-sm);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
   border: 1px solid var(--border);
   overflow: hidden;
-  transition: box-shadow 0.2s;
+  transition:
+    transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.22s ease,
+    border-color 0.22s ease;
+}
+
+.webhook-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--primary-border);
 }
 
 .webhook-card:hover {
