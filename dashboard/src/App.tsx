@@ -5,6 +5,7 @@ import { Loader2 } from 'lucide-react';
 import { Layout } from './components/Layout';
 import { ToastProvider } from './components/Toast';
 import { RoleProvider, useRole, type UserRole } from './hooks/useRole';
+import { BrandingProvider } from './hooks/useBranding';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { API_BASE_URL } from './services/api';
 import { ClientApp } from './client/ClientApp';
@@ -40,6 +41,7 @@ const BulkMessaging = lazy(() => import('./pages/BulkMessaging').then(m => ({ de
 const MessageTester = lazy(() => import('./pages/MessageTester').then(m => ({ default: m.MessageTester })));
 const Infrastructure = lazy(() => import('./pages/Infrastructure').then(m => ({ default: m.Infrastructure })));
 const Plugins = lazy(() => import('./pages/Plugins'));
+const Branding = lazy(() => import('./pages/Branding').then(m => ({ default: m.Branding })));
 const OmegaClients = lazy(() => import('./omega/pages/OmegaClients').then(m => ({ default: m.OmegaClients })));
 const OmegaClientForm = lazy(() => import('./omega/pages/OmegaClientForm').then(m => ({ default: m.OmegaClientForm })));
 const OmegaClientDetails = lazy(() => import('./omega/pages/OmegaClientDetails').then(m => ({ default: m.OmegaClientDetails })));
@@ -148,6 +150,7 @@ function AppContent() {
             <Route path="message-tester" element={<MessageTester />} />
             <Route path="infrastructure" element={<Infrastructure />} />
             {role === 'admin' && <Route path="plugins" element={<Plugins />} />}
+            {role === 'admin' && <Route path="branding" element={<Branding />} />}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
@@ -165,9 +168,11 @@ function App() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <RoleProvider>
-          <AppContent />
-        </RoleProvider>
+        <BrandingProvider>
+          <RoleProvider>
+            <AppContent />
+          </RoleProvider>
+        </BrandingProvider>
       </QueryClientProvider>
     </ErrorBoundary>
   );

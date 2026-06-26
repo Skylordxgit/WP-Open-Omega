@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Eye, EyeOff, Languages } from 'lucide-react';
 import { languageOptions, resolveSupportedLanguage, type SupportedLanguage } from '../i18n';
 import { API_BASE_URL } from '../services/api';
+import { useBranding } from '../hooks/useBranding';
 import './Login.css';
 
 interface LoginProps {
@@ -11,6 +12,7 @@ interface LoginProps {
 
 export function Login({ onLogin }: LoginProps) {
   const { t, i18n } = useTranslation();
+  const { branding } = useBranding();
   const [apiKey, setApiKey] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -56,9 +58,9 @@ export function Login({ onLogin }: LoginProps) {
     <div className="login-container">
       <div className="login-card">
         <div className="login-logo">
-          <img src="/openwa_logo.webp" alt="OpenWA" className="logo-icon" />
-          <h1 className="login-title">OpenWA Technical Dashboard</h1>
-          <p className="login-subtitle">Internal API key access for session control, logs, plugins, and engine tools.</p>
+          <img src={branding.loginLogoUrl} alt={branding.appName} className="logo-icon" />
+          <h1 className="login-title">{branding.loginTitle}</h1>
+          <p className="login-subtitle">{branding.loginSubtitle}</p>
           <span className="version-info">
             {t('login.version', {
               version: __APP_VERSION__,

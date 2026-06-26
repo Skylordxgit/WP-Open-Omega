@@ -698,6 +698,57 @@ export const settingsApi = {
 };
 
 // =============================================================================
+// Branding API
+// =============================================================================
+
+export interface BrandingSettings {
+  appName: string;
+  sidebarHeadline: string;
+  sidebarSubtitle: string;
+  loginTitle: string;
+  loginSubtitle: string;
+  browserTitle: string;
+  primaryColor: string;
+  accentColor: string;
+  sidebarLogoUrl: string;
+  loginLogoUrl: string;
+  faviconUrl: string;
+  updatedAt: string;
+}
+
+export type UpdateBrandingPayload = Partial<
+  Omit<BrandingSettings, 'sidebarLogoUrl' | 'loginLogoUrl' | 'faviconUrl' | 'updatedAt'>
+>;
+
+export type BrandingUploadKind = 'sidebar-logo' | 'login-logo' | 'favicon';
+
+export const brandingApi = {
+  // Public endpoint — no API key required, so the login page can render branding pre-auth.
+  get: () => request<BrandingSettings>('/branding'),
+  update: (data: UpdateBrandingPayload) =>
+    request<BrandingSettings>('/branding', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  reset: () => request<BrandingSettings>('/branding/reset', { method: 'POST' }),
+  upload: async (kind: BrandingUploadKind, file: File): Promise<BrandingSettings> => {
+    const apiKey = localStorage.getItem('openwa_api_key') || sessionStorage.getItem('openwa_api_key');
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await fetch(`${API_BASE_URL}/branding/upload/${kind}`, {
+      method: 'POST',
+      headers: apiKey ? { 'X-API-Key': apiKey } : undefined,
+      body: formData,
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: response.statusText }));
+      throw new Error(error.message || `HTTP ${response.status}`);
+    }
+    return response.json();
+  },
+};
+
+// =============================================================================
 // Plugin Types
 // =============================================================================
 

@@ -34,6 +34,7 @@ import { PluginsModule } from './core/plugins';
 import { PluginsApiModule } from './modules/plugins/plugins.module';
 import { ExtensionsModule } from './plugins/extensions/extensions.module';
 import { OmegaModule } from './modules/omega/omega.module';
+import { BrandingModule } from './modules/branding/branding.module';
 
 // Only import QueueModule if explicitly enabled to avoid Redis connection errors
 const queueModules: Array<Type | DynamicModule> = [];
@@ -222,6 +223,7 @@ if (dashboardServingEnabled && dashboardBuildPresent) {
     PluginsApiModule, // Phase 5: Plugins API
     ExtensionsModule, // First-party extension plugins (registered disabled)
     OmegaModule, // Omega SaaS super admin layer
+    BrandingModule, // Platform brand identity (sidebar/login/favicon/colors)
     ...serveStaticModules, // Bundled dashboard SPA (production single-port setup)
   ],
 })
