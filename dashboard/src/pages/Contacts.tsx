@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Download, Loader2, Trash2, Upload, Users } from 'lucide-react';
+import { Download, Trash2, Upload, Users } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { PageHeader } from '../components/PageHeader';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
@@ -183,8 +183,15 @@ export function Contacts() {
 
   if (loadingSessions) {
     return (
-      <div className="contacts-page contacts-page--loading">
-        <Loader2 className="animate-spin" size={32} />
+      <div className="contacts-page" aria-busy="true" aria-label="Loading">
+        <div className="skeleton skeleton-line" style={{ width: '40%', height: 28, marginBottom: '0.6rem' }} />
+        <div className="skeleton skeleton-line" style={{ width: '60%', marginBottom: '1.75rem' }} />
+        <div className="skeleton-list">
+          <div className="skeleton skeleton-row" />
+          <div className="skeleton skeleton-row" />
+          <div className="skeleton skeleton-row" />
+          <div className="skeleton skeleton-row" />
+        </div>
       </div>
     );
   }

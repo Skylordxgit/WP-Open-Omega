@@ -207,6 +207,7 @@
   justify-content: center;
   min-height: 200px;
   background: var(--bg-light);
+  border: 1px dashed var(--border-strong);
   border-radius: var(--radius);
 }
 

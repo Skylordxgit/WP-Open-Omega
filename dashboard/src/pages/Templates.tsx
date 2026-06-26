@@ -165,8 +165,15 @@ export function Templates() {
 
   if (loadingSessions) {
     return (
-      <div className="templates-page templates-loading">
-        <Loader2 className="animate-spin" size={32} />
+      <div className="templates-page" aria-busy="true" aria-label="Loading">
+        <div className="skeleton skeleton-line" style={{ width: '36%', height: 28, marginBottom: '0.6rem' }} />
+        <div className="skeleton skeleton-line" style={{ width: '54%', marginBottom: '1.75rem' }} />
+        <div className="skeleton-list">
+          <div className="skeleton skeleton-row" />
+          <div className="skeleton skeleton-row" />
+          <div className="skeleton skeleton-row" />
+          <div className="skeleton skeleton-row" />
+        </div>
       </div>
     );
   }
