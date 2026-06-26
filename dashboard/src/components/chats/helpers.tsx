@@ -132,6 +132,20 @@ export const MEDIA_AVAILABLE_LABELS: Record<string, string> = {
   sticker: 'Sticker available',
 };
 
+// Strip the WhatsApp JID suffix (@c.us / @lid / @s.whatsapp.net / @g.us / @newsletter)
+// for display. Presentation only — never mutates stored ids.
+export const stripJidSuffix = (id: string): string => (id ? id.split('@')[0] : '');
+
+// Single source of truth for how a contact/chat is displayed across the app
+// (Chats, Dashboard analytics, bulk results). Shows the resolved contact name or
+// phone when available, otherwise the WhatsApp id with its suffix removed — so a
+// raw `…@lid` / `…@c.us` is never rendered. Reused everywhere; do not duplicate.
+export const formatContactDisplay = (name: string | null | undefined, id: string): string => {
+  const trimmed = name?.trim();
+  if (trimmed) return trimmed;
+  return stripJidSuffix(id);
+};
+
 export const formatTime = (timestamp?: number) => {
   if (!timestamp) return '';
   return new Date(timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });

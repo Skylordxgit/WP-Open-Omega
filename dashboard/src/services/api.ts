@@ -791,6 +791,7 @@ export interface DashboardAnalytics {
   }>;
   recentChats: Array<{
     chatId: string;
+    contactName: string | null;
     sessionId: string;
     sessionName: string;
     lastMessageAt: string;
@@ -799,6 +800,7 @@ export interface DashboardAnalytics {
   }>;
   unrepliedChats: Array<{
     chatId: string;
+    contactName: string | null;
     sessionId: string;
     sessionName: string;
     lastIncomingAt: string;
@@ -809,13 +811,14 @@ export interface DashboardAnalytics {
     id: string;
     sessionId: string;
     chatId: string;
+    contactName: string | null;
     to: string;
     type: string;
     body: string | null;
     createdAt: string;
     error: string | null;
   }>;
-  topContacts: Array<{ chatId: string; sessionId: string; sessionName: string; messageCount: number }>;
+  topContacts: Array<{ chatId: string; contactName: string | null; sessionId: string; sessionName: string; messageCount: number }>;
 }
 
 export const dashboardApi = {

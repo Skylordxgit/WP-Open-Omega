@@ -22,13 +22,10 @@ import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { useDashboardAnalyticsQuery } from '../hooks/queries';
 import type { DashboardAnalytics, MetricAvailability } from '../services/api';
 import { PageHeader } from '../components/PageHeader';
+import { formatContactDisplay } from '../components/chats';
 import './Dashboard.css';
 
 // ── Formatting helpers ────────────────────────────────────────────────
-
-function shortChat(chatId: string): string {
-  return chatId.replace(/@(c|g|s)\.(us|whatsapp\.net)$/i, '').replace(/@g\.us$/i, '');
-}
 
 function formatDuration(seconds: number | null): string {
   if (seconds === null) return '—';
@@ -299,7 +296,7 @@ export function Dashboard() {
                     {ch.lastDirection === 'incoming' ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />}
                   </span>
                   <div className="list-main">
-                    <span className="list-title">{shortChat(ch.chatId)}</span>
+                    <span className="list-title">{formatContactDisplay(ch.contactName, ch.chatId)}</span>
                     <span className="list-sub">{ch.sessionName} · {ch.messageCount} msg</span>
                   </div>
                   <span className="list-time">{formatTime(ch.lastMessageAt)}</span>
@@ -322,7 +319,7 @@ export function Dashboard() {
                 <li key={`${ch.sessionId}-${ch.chatId}`} className="list-row">
                   <span className="dir-pill incoming"><ArrowDownLeft size={14} /></span>
                   <div className="list-main">
-                    <span className="list-title">{shortChat(ch.chatId)}</span>
+                    <span className="list-title">{formatContactDisplay(ch.contactName, ch.chatId)}</span>
                     <span className="list-sub">{ch.sessionName} · {ch.incomingCount} incoming</span>
                   </div>
                   <span className="list-time warn">waiting {formatDuration(ch.waitingSeconds)}</span>
@@ -345,7 +342,7 @@ export function Dashboard() {
                 <li key={`${ct.sessionId}-${ct.chatId}`} className="list-row">
                   <span className="rank">{i + 1}</span>
                   <div className="list-main">
-                    <span className="list-title">{shortChat(ct.chatId)}</span>
+                    <span className="list-title">{formatContactDisplay(ct.contactName, ct.chatId)}</span>
                     <span className="list-sub">{ct.sessionName}</span>
                   </div>
                   <span className="list-time">{ct.messageCount.toLocaleString()} msg</span>
@@ -368,7 +365,7 @@ export function Dashboard() {
                 <li key={f.id} className="list-row">
                   <span className="dir-pill failed"><AlertTriangle size={14} /></span>
                   <div className="list-main">
-                    <span className="list-title">{shortChat(f.chatId)}</span>
+                    <span className="list-title">{formatContactDisplay(f.contactName, f.chatId)}</span>
                     <span className="list-sub">{f.error || f.body || `${f.type} message`}</span>
                   </div>
                   <span className="list-time">{formatTime(f.createdAt)}</span>

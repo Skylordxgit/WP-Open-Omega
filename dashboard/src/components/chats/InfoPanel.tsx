@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { Users, User, X, Phone, AtSign, Hash, Tag, BarChart3, Image as ImageIcon, FileText, StickyNote } from 'lucide-react';
 import type { ChatWithSession } from './types';
+import { formatContactDisplay } from './helpers';
 
 interface InfoPanelProps {
   chat: ChatWithSession;
@@ -55,7 +56,7 @@ export const InfoPanel = memo(function InfoPanel({
         <div className="chat-info-body">
           <div className="chat-info-identity">
             <div className="chat-info-avatar">{chat.isGroup ? <Users size={26} /> : <User size={26} />}</div>
-            <div className="chat-info-name">{chat.name || chat.id.split('@')[0]}</div>
+            <div className="chat-info-name">{formatContactDisplay(chat.name, chat.id)}</div>
             <span className={`chat-info-type ${chat.isGroup ? 'group' : 'direct'}`}>
               {chat.isGroup ? 'Group chat' : 'Direct chat'}
             </span>

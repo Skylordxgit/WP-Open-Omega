@@ -4,6 +4,7 @@ import { Between, Repository } from 'typeorm';
 import { Session, SessionStatus } from '../session/entities/session.entity';
 import { Message, MessageDirection, MessageStatus } from '../message/entities/message.entity';
 import { MessageBatch } from '../message/entities/message-batch.entity';
+import { SavedContact } from '../contact/entities/saved-contact.entity';
 
 /** Message types that count as "media" for the media-messages metric. */
 const MEDIA_TYPES = new Set(['image', 'video', 'audio', 'voice', 'ptt', 'document', 'sticker']);
@@ -57,6 +58,7 @@ export interface DashboardAnalytics {
   }>;
   recentChats: Array<{
     chatId: string;
+    contactName: string | null;
     sessionId: string;
     sessionName: string;
     lastMessageAt: string;
@@ -65,6 +67,7 @@ export interface DashboardAnalytics {
   }>;
   unrepliedChats: Array<{
     chatId: string;
+    contactName: string | null;
     sessionId: string;
     sessionName: string;
     lastIncomingAt: string;
@@ -75,6 +78,7 @@ export interface DashboardAnalytics {
     id: string;
     sessionId: string;
     chatId: string;
+    contactName: string | null;
     to: string;
     type: string;
     body: string | null;
@@ -83,6 +87,7 @@ export interface DashboardAnalytics {
   }>;
   topContacts: Array<{
     chatId: string;
+    contactName: string | null;
     sessionId: string;
     sessionName: string;
     messageCount: number;
@@ -113,7 +118,36 @@ export class DashboardService {
     private readonly messageRepo: Repository<Message>,
     @InjectRepository(MessageBatch, 'data')
     private readonly batchRepo: Repository<MessageBatch>,
+    @InjectRepository(SavedContact, 'data')
+    private readonly savedContactRepo: Repository<SavedContact>,
   ) {}
+
+  /**
+   * Build a per-session lookup of digits-only phone number → saved contact name.
+   * Used to resolve a chat's saved contact name; the frontend's shared
+   * formatContactDisplay handles the phone/strip-suffix fallback.
+   */
+  private async buildContactNameResolver(): Promise<(sessionId: string, chatId: string) => string | null> {
+    const contacts = await this.savedContactRepo.find();
+    const bySession = new Map<string, Map<string, string>>();
+    for (const ct of contacts) {
+      if (!ct.name) continue;
+      const digits = (ct.number || '').replace(/\D/g, '');
+      if (!digits) continue;
+      let map = bySession.get(ct.sessionId);
+      if (!map) {
+        map = new Map();
+        bySession.set(ct.sessionId, map);
+      }
+      if (!map.has(digits)) map.set(digits, ct.name);
+    }
+    return (sessionId: string, chatId: string): string | null => {
+      const local = chatId.split('@')[0];
+      const digits = local.replace(/\D/g, '');
+      if (!digits) return null;
+      return bySession.get(sessionId)?.get(digits) ?? null;
+    };
+  }
 
   /**
    * Build the full analytics payload for a single day (defaults to "today" in
@@ -127,6 +161,7 @@ export class DashboardService {
     const sessions = await this.sessionRepo.find();
     const sessionNames = new Map(sessions.map(s => [s.id, s.name]));
     const activeSessions = sessions.filter(s => s.status === SessionStatus.READY).length;
+    const resolveContactName = await this.buildContactNameResolver();
 
     // Pull today's messages once and aggregate in memory. This keeps all
     // date/hour bucketing in the server's local timezone (JS Date) and avoids
@@ -237,6 +272,7 @@ export class DashboardService {
           id: m.id,
           sessionId: m.sessionId,
           chatId: m.chatId,
+          contactName: resolveContactName(m.sessionId, m.chatId),
           to: m.to,
           type: m.type,
           body: m.body ? m.body.slice(0, 200) : null,
@@ -259,6 +295,7 @@ export class DashboardService {
         if (agg.awaitingSince && agg.lastIncomingAt) {
           unrepliedChats.push({
             chatId: agg.chatId,
+            contactName: resolveContactName(agg.sessionId, agg.chatId),
             sessionId: agg.sessionId,
             sessionName: sessionNames.get(agg.sessionId) || 'Unknown',
             lastIncomingAt: agg.lastIncomingAt.toISOString(),
@@ -322,6 +359,7 @@ export class DashboardService {
       .slice(0, 10)
       .map(agg => ({
         chatId: agg.chatId,
+        contactName: resolveContactName(agg.sessionId, agg.chatId),
         sessionId: agg.sessionId,
         sessionName: sessionNames.get(agg.sessionId) || 'Unknown',
         lastMessageAt: agg.lastMessage.createdAt.toISOString(),
@@ -335,6 +373,7 @@ export class DashboardService {
       .slice(0, 10)
       .map(c => ({
         chatId: c.chatId,
+        contactName: resolveContactName(c.sessionId, c.chatId),
         sessionId: c.sessionId,
         sessionName: sessionNames.get(c.sessionId) || 'Unknown',
         messageCount: c.count,

@@ -34,6 +34,8 @@ import {
   formatTime,
   formatChatTime,
   formatDateSeparator,
+  formatContactDisplay,
+  stripJidSuffix,
   messageTypeFromMime,
   type ChatWithSession,
   type ChatMessageView,
@@ -851,7 +853,7 @@ export function Chats() {
   );
 
   // Phone number for a 1:1 chat is encoded in the JID (e.g. 1234567890@c.us). Groups have no number.
-  const activeChatPhone = activeChat && !activeChat.isGroup ? activeChat.id.split('@')[0] : '';
+  const activeChatPhone = activeChat && !activeChat.isGroup ? stripJidSuffix(activeChat.id) : '';
 
   // The channel the active chat actually belongs to (multi-channel safe — not the rail selector).
   const activeChatSession = activeChat ? sessions.find(s => s.id === activeChat.sessionId) || null : null;
@@ -866,7 +868,7 @@ export function Chats() {
           const matchesSearch =
             chat.name?.toLowerCase().includes(query) ||
             chat.id.toLowerCase().includes(query) ||
-            chat.id.split('@')[0].includes(query);
+            stripJidSuffix(chat.id).includes(query);
 
           if (!matchesSearch) return false;
           if (inboxView === 'unread') return (chat.unreadCount || 0) > 0;
@@ -1233,7 +1235,7 @@ export function Chats() {
                   showEmojiPicker={showEmojiPicker}
                   replyingTo={replyingTo}
                   replyingToTitle={t('chats.replyingTo', {
-                    name: replyingTo?.direction === 'outgoing' ? t('chats.you') : activeChat.name || activeChat.id.split('@')[0],
+                    name: replyingTo?.direction === 'outgoing' ? t('chats.you') : formatContactDisplay(activeChat.name, activeChat.id),
                   })}
                   replyingToBody={replyingTo ? (replyingTo.type !== 'text' ? `[${replyingTo.type}]` : replyingTo.body) : ''}
                   popularEmojis={POPULAR_EMOJIS}

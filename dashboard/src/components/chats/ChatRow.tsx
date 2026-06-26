@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { Users, User } from 'lucide-react';
 import type { ChatWithSession } from './types';
-import { formatChatTime, highlightMatch } from './helpers';
+import { formatChatTime, highlightMatch, formatContactDisplay } from './helpers';
 
 interface ChatRowProps {
   chat: ChatWithSession;
@@ -22,7 +22,7 @@ export const ChatRow = memo(function ChatRow({
   noMessageLabel,
   onSelect,
 }: ChatRowProps) {
-  const displayName = chat.name || chat.id.split('@')[0];
+  const displayName = formatContactDisplay(chat.name, chat.id);
   const snippet = chat.lastMessage || '';
 
   return (

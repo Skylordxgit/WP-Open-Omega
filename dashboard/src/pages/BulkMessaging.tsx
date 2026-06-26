@@ -13,6 +13,7 @@ import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { useRole } from '../hooks/useRole';
 import { useSessionGroupsQuery, useSessionsQuery } from '../hooks/queries';
 import { PageHeader } from '../components/PageHeader';
+import { formatContactDisplay } from '../components/chats';
 import './BulkMessaging.css';
 
 const messageTypes = ['text', 'image', 'video', 'audio', 'document'] as const;
@@ -482,7 +483,7 @@ export function BulkMessaging() {
                   {(batchStatus?.results ?? []).slice(-8).reverse().map((result, index) => (
                     <div key={`${result.chatId}-${index}`} className="bulk-result-item">
                       <div>
-                        <strong>{result.chatId}</strong>
+                        <strong>{formatContactDisplay(null, result.chatId)}</strong>
                         <p>{result.error?.message ?? result.messageId ?? 'Sent successfully'}</p>
                       </div>
                       <span className={`bulk-result-badge bulk-result-badge--${result.status.toLowerCase()}`}>

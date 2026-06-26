@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { Users, User, Search, Info, MoreVertical, Phone, Video } from 'lucide-react';
 import type { ChatWithSession } from './types';
+import { formatContactDisplay } from './helpers';
 
 interface ConversationHeaderProps {
   chat: ChatWithSession;
@@ -30,7 +31,7 @@ export const ConversationHeader = memo(function ConversationHeader({
           {chat.isGroup ? <Users size={21} /> : <User size={21} />}
         </div>
         <div className="room-contact-info">
-          <h3>{chat.name || chat.id.split('@')[0]}</h3>
+          <h3>{formatContactDisplay(chat.name, chat.id)}</h3>
           <div className="room-contact-meta">
             <span className={statusOk ? 'meta-ok' : 'meta-warn'}>{statusLabel}</span>
             <span>{chat.isGroup ? 'Group' : 'Direct'}</span>
