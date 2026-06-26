@@ -1,38 +1,60 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap');
 
+/* =====================================================================
+   Spatial UI design tokens — premium visionOS/Linear-style language.
+   Variable names are preserved so every existing page inherits the new
+   look (radii, surfaces, borders, elevation) with no markup changes.
+   ===================================================================== */
 :root {
-  --primary: #25d366;
-  --primary-hover: #1db85a;
-  --primary-soft: rgba(37, 211, 102, 0.12);
-  --primary-soft-strong: rgba(37, 211, 102, 0.2);
-  --primary-border: rgba(37, 211, 102, 0.3);
-  --bg-light: #f2f7f4;
+  --primary: #18b561;
+  --primary-hover: #149a53;
+  --primary-soft: rgba(24, 181, 97, 0.12);
+  --primary-soft-strong: rgba(24, 181, 97, 0.2);
+  --primary-border: rgba(24, 181, 97, 0.3);
+  --bg-light: #eef1f6;
   --bg-white: #ffffff;
   --bg-card: #ffffff;
-  --text-primary: #102131;
-  --text-secondary: #42566f;
-  --text-muted: #7890aa;
-  --border: #d9e5df;
-  --border-strong: #bfd1c7;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #7c8aa0;
+  --border: #e7ebf2;
+  --border-strong: #d4dae4;
   --error: #ef4444;
   --success: #22c55e;
   --warning: #f59e0b;
+  /* Soft, neutral spatial backdrop with a faint brand + cool wash. */
   --page-bg:
-    radial-gradient(circle at top right, rgba(37, 211, 102, 0.15), transparent 24%),
-    radial-gradient(circle at top left, rgba(16, 185, 129, 0.08), transparent 22%),
-    linear-gradient(180deg, #eef6f1 0%, #f7faf8 34%, #f2f7fb 100%);
-  --sidebar-bg: linear-gradient(180deg, #0f1724 0%, #172538 100%);
+    radial-gradient(1100px 560px at 86% -12%, rgba(24, 181, 97, 0.10), transparent 60%),
+    radial-gradient(900px 520px at -8% 4%, rgba(56, 189, 248, 0.08), transparent 56%),
+    linear-gradient(180deg, #eef2f8 0%, #f5f7fb 42%, #eef2f8 100%);
+  --sidebar-bg: linear-gradient(180deg, rgba(17, 24, 38, 0.86) 0%, rgba(20, 30, 48, 0.82) 100%);
   --sidebar-text: #f3f8ff;
-  --sidebar-muted: #8aa0b8;
-  --sidebar-border: rgba(255, 255, 255, 0.08);
-  --sidebar-surface: rgba(255, 255, 255, 0.05);
-  --sidebar-surface-hover: rgba(255, 255, 255, 0.11);
-  --sidebar-active: rgba(37, 211, 102, 0.16);
-  --sidebar-active-border: rgba(37, 211, 102, 0.38);
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-  --radius: 10px;
+  --sidebar-muted: #93a6c0;
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --sidebar-surface: rgba(255, 255, 255, 0.06);
+  --sidebar-surface-hover: rgba(255, 255, 255, 0.12);
+  --sidebar-active: rgba(24, 181, 97, 0.2);
+  --sidebar-active-border: rgba(24, 181, 97, 0.42);
+
+  /* Spatial elevation — soft, layered, low-opacity shadows (consumed app-wide). */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 6px 16px -6px rgba(15, 23, 42, 0.12), 0 2px 6px -2px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 20px 44px -16px rgba(15, 23, 42, 0.20), 0 8px 20px -10px rgba(15, 23, 42, 0.12);
+  --shadow-float: 0 28px 70px -24px rgba(15, 23, 42, 0.30), 0 10px 28px -12px rgba(15, 23, 42, 0.16);
+
+  /* Rounded, modern corners. */
+  --radius: 16px;
+  --radius-sm: 11px;
+  --radius-lg: 22px;
+  --radius-pill: 999px;
+
+  /* Premium glass materials. */
+  --glass-bg: rgba(255, 255, 255, 0.68);
+  --glass-bg-strong: rgba(255, 255, 255, 0.82);
+  --glass-border: rgba(255, 255, 255, 0.7);
+  --glass-hairline: rgba(15, 23, 42, 0.06);
+  --glass-blur: 22px;
+  --glass-highlight: rgba(255, 255, 255, 0.6);
 }
 
 /* Dark Mode */
@@ -41,32 +63,40 @@
      app theme, not just the OS preference — otherwise toggling dark while the OS is light left
      native dropdowns rendered in the light scheme (#249). */
   color-scheme: dark;
-  --primary-soft: rgba(37, 211, 102, 0.16);
-  --primary-soft-strong: rgba(37, 211, 102, 0.24);
-  --primary-border: rgba(37, 211, 102, 0.34);
-  --bg-light: #0b1320;
-  --bg-white: #121d2c;
-  --bg-card: #121d2c;
-  --text-primary: #eff6ff;
-  --text-secondary: #bfd0e6;
-  --text-muted: #7890aa;
-  --border: #253247;
-  --border-strong: #30425b;
+  --primary: #21c77f;
+  --primary-hover: #2ad389;
+  --primary-soft: rgba(33, 199, 127, 0.18);
+  --primary-soft-strong: rgba(33, 199, 127, 0.26);
+  --primary-border: rgba(33, 199, 127, 0.36);
+  --bg-light: #0c1422;
+  --bg-white: #131f30;
+  --bg-card: #131f30;
+  --text-primary: #eef6ff;
+  --text-secondary: #bcccE4;
+  --text-muted: #8095ad;
+  --border: #243246;
+  --border-strong: #32435c;
   --page-bg:
-    radial-gradient(circle at top right, rgba(37, 211, 102, 0.14), transparent 24%),
-    radial-gradient(circle at top left, rgba(16, 185, 129, 0.1), transparent 22%),
-    linear-gradient(180deg, #08111d 0%, #0c1625 34%, #0b1421 100%);
-  --sidebar-bg: linear-gradient(180deg, #070d16 0%, #0d1726 100%);
+    radial-gradient(1100px 560px at 86% -12%, rgba(33, 199, 127, 0.12), transparent 58%),
+    radial-gradient(900px 520px at -8% 4%, rgba(56, 189, 248, 0.10), transparent 55%),
+    linear-gradient(180deg, #070e19 0%, #0a1320 44%, #070e19 100%);
+  --sidebar-bg: linear-gradient(180deg, rgba(8, 14, 24, 0.82) 0%, rgba(12, 21, 35, 0.78) 100%);
   --sidebar-text: #eef6ff;
-  --sidebar-muted: #86a0bb;
-  --sidebar-border: rgba(255, 255, 255, 0.08);
-  --sidebar-surface: rgba(255, 255, 255, 0.05);
-  --sidebar-surface-hover: rgba(255, 255, 255, 0.1);
-  --sidebar-active: rgba(37, 211, 102, 0.18);
-  --sidebar-active-border: rgba(37, 211, 102, 0.34);
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.4);
+  --sidebar-muted: #8aa2bd;
+  --sidebar-border: rgba(255, 255, 255, 0.09);
+  --sidebar-surface: rgba(255, 255, 255, 0.06);
+  --sidebar-surface-hover: rgba(255, 255, 255, 0.12);
+  --sidebar-active: rgba(33, 199, 127, 0.2);
+  --sidebar-active-border: rgba(33, 199, 127, 0.4);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.36);
+  --shadow-md: 0 8px 20px -8px rgba(0, 0, 0, 0.5), 0 3px 8px -3px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 24px 50px -18px rgba(0, 0, 0, 0.6), 0 10px 24px -12px rgba(0, 0, 0, 0.45);
+  --shadow-float: 0 32px 80px -28px rgba(0, 0, 0, 0.7), 0 12px 30px -14px rgba(0, 0, 0, 0.5);
+  --glass-bg: rgba(19, 31, 48, 0.62);
+  --glass-bg-strong: rgba(19, 31, 48, 0.82);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-hairline: rgba(255, 255, 255, 0.07);
+  --glass-highlight: rgba(255, 255, 255, 0.06);
 }
 
 /* Explicit light toggle: keep native controls light even if the OS prefers dark. */
@@ -81,32 +111,40 @@
        The Login screen never sets data-theme, so it relies solely on this block — without an
        explicit color-scheme the popup rendered light, leaving the light option text illegible (#249). */
     color-scheme: dark;
-    --primary-soft: rgba(37, 211, 102, 0.16);
-    --primary-soft-strong: rgba(37, 211, 102, 0.24);
-    --primary-border: rgba(37, 211, 102, 0.34);
-    --bg-light: #0b1320;
-    --bg-white: #121d2c;
-    --bg-card: #121d2c;
-    --text-primary: #eff6ff;
-    --text-secondary: #bfd0e6;
-    --text-muted: #7890aa;
-    --border: #253247;
-    --border-strong: #30425b;
+    --primary: #21c77f;
+    --primary-hover: #2ad389;
+    --primary-soft: rgba(33, 199, 127, 0.18);
+    --primary-soft-strong: rgba(33, 199, 127, 0.26);
+    --primary-border: rgba(33, 199, 127, 0.36);
+    --bg-light: #0c1422;
+    --bg-white: #131f30;
+    --bg-card: #131f30;
+    --text-primary: #eef6ff;
+    --text-secondary: #bcccE4;
+    --text-muted: #8095ad;
+    --border: #243246;
+    --border-strong: #32435c;
     --page-bg:
-      radial-gradient(circle at top right, rgba(37, 211, 102, 0.14), transparent 24%),
-      radial-gradient(circle at top left, rgba(16, 185, 129, 0.1), transparent 22%),
-      linear-gradient(180deg, #08111d 0%, #0c1625 34%, #0b1421 100%);
-    --sidebar-bg: linear-gradient(180deg, #070d16 0%, #0d1726 100%);
+      radial-gradient(1100px 560px at 86% -12%, rgba(33, 199, 127, 0.12), transparent 58%),
+      radial-gradient(900px 520px at -8% 4%, rgba(56, 189, 248, 0.10), transparent 55%),
+      linear-gradient(180deg, #070e19 0%, #0a1320 44%, #070e19 100%);
+    --sidebar-bg: linear-gradient(180deg, rgba(8, 14, 24, 0.82) 0%, rgba(12, 21, 35, 0.78) 100%);
     --sidebar-text: #eef6ff;
-    --sidebar-muted: #86a0bb;
-    --sidebar-border: rgba(255, 255, 255, 0.08);
-    --sidebar-surface: rgba(255, 255, 255, 0.05);
-    --sidebar-surface-hover: rgba(255, 255, 255, 0.1);
-    --sidebar-active: rgba(37, 211, 102, 0.18);
-    --sidebar-active-border: rgba(37, 211, 102, 0.34);
-    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
-    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
-    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.4);
+    --sidebar-muted: #8aa2bd;
+    --sidebar-border: rgba(255, 255, 255, 0.09);
+    --sidebar-surface: rgba(255, 255, 255, 0.06);
+    --sidebar-surface-hover: rgba(255, 255, 255, 0.12);
+    --sidebar-active: rgba(33, 199, 127, 0.2);
+    --sidebar-active-border: rgba(33, 199, 127, 0.4);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.36);
+    --shadow-md: 0 8px 20px -8px rgba(0, 0, 0, 0.5), 0 3px 8px -3px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 24px 50px -18px rgba(0, 0, 0, 0.6), 0 10px 24px -12px rgba(0, 0, 0, 0.45);
+    --shadow-float: 0 32px 80px -28px rgba(0, 0, 0, 0.7), 0 12px 30px -14px rgba(0, 0, 0, 0.5);
+    --glass-bg: rgba(19, 31, 48, 0.62);
+    --glass-bg-strong: rgba(19, 31, 48, 0.82);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --glass-hairline: rgba(255, 255, 255, 0.07);
+    --glass-highlight: rgba(255, 255, 255, 0.06);
   }
 }
 

@@ -8,7 +8,7 @@
 .engine-card {
   background: linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(16, 185, 129, 0.1) 100%);
   border: 1px solid rgba(34, 197, 94, 0.2);
-  border-radius: 12px;
+  border-radius: var(--radius);
   padding: 1.5rem;
   margin-bottom: 2rem;
 }
@@ -29,7 +29,7 @@
   width: 48px;
   height: 48px;
   background: rgba(34, 197, 94, 0.15);
-  border-radius: 12px;
+  border-radius: var(--radius);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -92,7 +92,7 @@
 .plugin-card {
   background: var(--bg-white);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius);
   overflow: hidden;
   transition:
     transform 0.2s,

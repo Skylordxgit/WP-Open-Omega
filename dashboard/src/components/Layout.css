@@ -5,15 +5,21 @@
 
 /* ==================== Sidebar ==================== */
 .sidebar {
-  width: 260px;
+  width: 248px;
   background: var(--sidebar-bg);
-  border-right: 1px solid var(--sidebar-border);
-  box-shadow: 16px 0 40px rgba(8, 17, 29, 0.12);
+  -webkit-backdrop-filter: blur(26px) saturate(150%);
+  backdrop-filter: blur(26px) saturate(150%);
+  border: 1px solid var(--sidebar-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-float);
   display: flex;
   flex-direction: column;
   position: fixed;
-  height: 100vh;
+  top: 16px;
+  left: 16px;
+  bottom: 16px;
   z-index: 100;
+  overflow: hidden;
   transition:
     width 0.3s ease,
     transform 0.3s ease;
@@ -283,8 +289,9 @@
 /* ==================== Main Content ==================== */
 .main-content {
   flex: 1;
-  margin-left: 260px;
-  width: calc(100% - 260px);
+  /* 248 rail + 16 left inset + 16 gap = 280 */
+  margin-left: 280px;
+  width: calc(100% - 280px);
   background: var(--page-bg);
   min-height: 100vh;
   overflow-x: hidden;
@@ -294,8 +301,9 @@
 }
 
 .main-content.expanded {
-  margin-left: 72px;
-  width: calc(100% - 72px);
+  /* 72 collapsed rail + 16 + 16 = 104 */
+  margin-left: 104px;
+  width: calc(100% - 104px);
 }
 
 /* ==================== Mobile Styles ==================== */
@@ -360,6 +368,12 @@
   .sidebar.mobile {
     transform: translateX(-100%);
     width: 280px;
+    /* Full-height edge drawer on mobile — undo the desktop floating inset/rounding. */
+    top: 0;
+    left: 0;
+    bottom: 0;
+    height: 100vh;
+    border-radius: 0;
     box-shadow: 10px 0 30px rgba(4, 10, 18, 0.3);
   }
 
@@ -401,8 +415,8 @@
 
 /* ==================== RTL support ==================== */
 [dir="rtl"] .sidebar {
-  border-right: none;
-  border-left: 1px solid var(--border);
+  left: auto;
+  right: 16px;
 }
 
 [dir="rtl"] .collapse-toggle {
@@ -425,14 +439,14 @@
 
 [dir="rtl"] .main-content {
   margin-left: 0;
-  margin-right: 260px;
+  margin-right: 280px;
   transition:
     margin-right 0.3s ease,
     width 0.3s ease;
 }
 
 [dir="rtl"] .main-content.expanded {
-  margin-right: 72px;
+  margin-right: 104px;
 }
 
 @media (max-width: 768px) {

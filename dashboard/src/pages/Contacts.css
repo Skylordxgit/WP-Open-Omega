@@ -60,7 +60,7 @@
 .contacts-card {
   background: var(--bg-white);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
   padding: 1.5rem;
 }
