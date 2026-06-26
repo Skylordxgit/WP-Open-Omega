@@ -47,16 +47,20 @@ function applyColorTokens(branding: BrandingSettings) {
 }
 
 /**
- * Single source of truth for the browser tab title.
- * Prefers the configured browser tab title, falls back to the app name, and
- * finally to the built-in default — never a stray hardcoded string elsewhere.
+ * Single source of truth for the document title.
+ * - If a Browser tab title is configured, it wins verbatim (no page prefix).
+ * - Otherwise use the "Page | App name" format, falling back to the built-in
+ *   default app name only when nothing is configured (e.g. branding reset).
  */
-export function resolveBrowserTitle(branding: BrandingSettings): string {
-  return branding.browserTitle?.trim() || branding.appName?.trim() || DEFAULT_BRANDING.browserTitle;
+export function resolveDocumentTitle(branding: BrandingSettings, pageTitle = ''): string {
+  const explicit = branding.browserTitle?.trim();
+  if (explicit) return explicit;
+  const appName = branding.appName?.trim() || DEFAULT_BRANDING.browserTitle;
+  return pageTitle ? `${pageTitle} | ${appName}` : appName;
 }
 
 function applyBrowserChrome(branding: BrandingSettings) {
-  document.title = resolveBrowserTitle(branding);
+  document.title = resolveDocumentTitle(branding);
 
   let favicon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
   if (!favicon) {
