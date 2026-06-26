@@ -262,6 +262,8 @@ export interface PaginatedProducts {
 export interface ChatSummary {
   id: string;
   name: string;
+  pushName?: string;
+  phone?: string;
   isGroup: boolean;
   unreadCount: number;
   timestamp: number;

@@ -165,6 +165,8 @@ export interface BulkMessageBatchStatus {
 export interface Chat {
   id: string;
   name: string;
+  pushName?: string;
+  phone?: string;
   isGroup: boolean;
   unreadCount: number;
   timestamp: number;

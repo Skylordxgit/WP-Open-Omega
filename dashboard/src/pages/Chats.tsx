@@ -69,11 +69,20 @@ type ResolvedMediaAttachment = {
   caption?: string;
 };
 
+type MessageContactInfo = {
+  name?: string;
+  pushName?: string;
+  phone?: string;
+  number?: string;
+};
+
 interface ChatMessageView extends ChatMessage {
   metadata?: {
     media?: MessageMedia;
     quotedMessage?: { id: string; body: string };
     reactions?: Record<string, string>;
+    contact?: MessageContactInfo;
+    senderPhone?: string | null;
   };
   text?: string;
   caption?: string;
@@ -94,6 +103,8 @@ interface ChatMessageView extends ChatMessage {
   quotedMsg?: { id?: string; body?: string; text?: string };
   mentions?: string[];
   mentionedJidList?: string[];
+  contact?: MessageContactInfo;
+  senderPhone?: string | null;
 }
 
 interface InboxChat extends Chat {
@@ -147,6 +158,8 @@ interface IncomingWsMessage {
   filesize?: number;
   mentionedJidList?: string[];
   mentions?: string[];
+  contact?: MessageContactInfo;
+  senderPhone?: string | null;
 }
 
 // Map an attachment MIME type to the neutral MessageType for the optimistic outgoing bubble, so the
@@ -391,9 +404,31 @@ const CHAT_HISTORY_INCREMENT = 200;
 const CHAT_STATUS_STORAGE_KEY = 'openwa_chat_statuses_v1';
 
 const normalizeContactNumber = (value?: string | null) => (value || '').replace(/[^0-9+]/g, '').trim();
+const getChatIdUserPart = (value?: string | null) => (value || '').split('@')[0].split(':')[0];
+const isLidChatId = (value?: string | null) => /@lid$/i.test(value || '');
+
+const isRawWhatsAppIdentifier = (value?: string | null, chatId?: string | null) => {
+  const trimmed = (value || '').trim();
+  if (!trimmed) return true;
+  const userPart = getChatIdUserPart(chatId);
+  return (
+    trimmed === chatId ||
+    trimmed === userPart ||
+    /@(?:lid|c\.us|s\.whatsapp\.net|g\.us)$/i.test(trimmed) ||
+    (isLidChatId(chatId) && /^\d{8,}$/.test(trimmed))
+  );
+};
+
+const getLidFallbackLabel = (chatId: string) => {
+  const userPart = getChatIdUserPart(chatId);
+  const shortId = userPart ? userPart.slice(-6) : '';
+  return shortId ? `WhatsApp private ID ${shortId}` : 'WhatsApp private contact';
+};
 
 const getDirectPhoneCandidate = (chat: Chat | null) =>
-  chat && !chat.isGroup ? normalizeContactNumber(chat.id.split('@')[0]) : '';
+  chat && !chat.isGroup
+    ? normalizeContactNumber(chat.phone || (isLidChatId(chat.id) ? '' : getChatIdUserPart(chat.id)))
+    : '';
 
 const loadStoredChatStatuses = (): Record<string, 'open' | 'closed'> => {
   try {
@@ -414,6 +449,11 @@ const sortMessagesAscending = (items: ChatMessageView[]) =>
 
 const mapLiveHistoryMessage = (message: LiveChatHistoryMessage): ChatMessageView => {
   const rawMessage = message as LiveChatHistoryMessage & Record<string, unknown>;
+  const rawMetadata =
+    typeof rawMessage.metadata === 'object' && rawMessage.metadata ? (rawMessage.metadata as ChatMessageView['metadata']) : {};
+  const rawContact =
+    typeof rawMessage.contact === 'object' && rawMessage.contact ? (rawMessage.contact as MessageContactInfo) : undefined;
+  const rawSenderPhone = typeof rawMessage.senderPhone === 'string' ? rawMessage.senderPhone : undefined;
   return {
     ...(rawMessage as Partial<ChatMessageView>),
     id: message.id,
@@ -428,9 +468,11 @@ const mapLiveHistoryMessage = (message: LiveChatHistoryMessage): ChatMessageView
     timestamp: message.timestamp,
     createdAt: new Date(message.timestamp * 1000).toISOString(),
     metadata: {
-      ...(typeof rawMessage.metadata === 'object' && rawMessage.metadata ? (rawMessage.metadata as ChatMessageView['metadata']) : {}),
+      ...rawMetadata,
       media: message.media,
       quotedMessage: message.quotedMessage,
+      contact: rawContact || rawMetadata?.contact,
+      senderPhone: rawSenderPhone || rawMetadata?.senderPhone,
     },
   };
 };
@@ -549,7 +591,9 @@ export function Chats() {
       const savedMatch = savedContacts.find(contact => normalizeContactNumber(contact.number) === normalized);
       if (savedMatch?.name) return savedMatch.name;
 
-      const chatMatch = chats.find(chat => normalizeContactNumber(chat.id.split('@')[0]) === normalized);
+      const chatMatch = chats.find(
+        chat => normalizeContactNumber(chat.phone || getChatIdUserPart(chat.id)) === normalized,
+      );
       return chatMatch?.name || null;
     },
     [savedContacts, chats],
@@ -811,9 +855,12 @@ export function Chats() {
           status: 'sent',
           timestamp: newMsg.timestamp,
           createdAt: new Date(newMsg.timestamp * 1000).toISOString(),
-          metadata: newMsg.metadata || {
-            media: newMsg.media,
-            quotedMessage: newMsg.quotedMessage,
+          metadata: {
+            ...(newMsg.metadata || {}),
+            media: newMsg.metadata?.media || newMsg.media,
+            quotedMessage: newMsg.metadata?.quotedMessage || newMsg.quotedMessage,
+            contact: newMsg.metadata?.contact || newMsg.contact,
+            senderPhone: newMsg.metadata?.senderPhone || newMsg.senderPhone,
           },
         };
 
@@ -1217,7 +1264,7 @@ export function Chats() {
     try {
       const next = await contactApi.saveBulk(activeSessionId, [
         {
-          name: activeChat.name || undefined,
+          name: getChatDisplayName(activeChat, contactPhone || directPhoneCandidate) || undefined,
           number,
           email: contactEmailInput.trim() || undefined,
           source: 'session',
@@ -1385,6 +1432,50 @@ export function Chats() {
   };
 
   const formatLastMessageSnippet = (chat: Chat) => chat.lastMessage || '';
+  const getMessageContactInfo = (message: ChatMessageView): MessageContactInfo | null => {
+    const metadataContact = message.metadata?.contact;
+    const directContact = message.contact;
+    const senderPhone =
+      message.senderPhone ||
+      (typeof message.metadata?.senderPhone === 'string' ? message.metadata.senderPhone : undefined);
+    return metadataContact || directContact || senderPhone ? { ...directContact, ...metadataContact, phone: senderPhone } : null;
+  };
+  const getActiveMessageContactInfo = (chat: InboxChat | null): MessageContactInfo | null => {
+    if (!chat || activeChat?.id !== chat.id || activeChat?.sessionId !== chat.sessionId) return null;
+    for (const message of messages) {
+      const contact = getMessageContactInfo(message);
+      if (contact?.name || contact?.pushName || contact?.phone || contact?.number) {
+        return contact;
+      }
+    }
+    return null;
+  };
+  const getSavedContactForChat = (chat: Chat, resolvedPhone?: string) => {
+    const phone = normalizeContactNumber(resolvedPhone || chat.phone || getDirectPhoneCandidate(chat));
+    return phone ? savedContacts.find(contact => normalizeContactNumber(contact.number) === phone) || null : null;
+  };
+  const getChatDisplayName = (chat: InboxChat | null, resolvedPhone?: string) => {
+    if (!chat) return '';
+    const savedContact = getSavedContactForChat(chat, resolvedPhone);
+    const messageContact = getActiveMessageContactInfo(chat);
+    const readableName =
+      (!isRawWhatsAppIdentifier(chat.name, chat.id) && chat.name) ||
+      (!isRawWhatsAppIdentifier(chat.pushName, chat.id) && chat.pushName) ||
+      savedContact?.name ||
+      (!isRawWhatsAppIdentifier(messageContact?.name, chat.id) && messageContact?.name) ||
+      (!isRawWhatsAppIdentifier(messageContact?.pushName, chat.id) && messageContact?.pushName);
+    if (readableName) return readableName;
+
+    const phone = normalizeContactNumber(resolvedPhone || chat.phone || messageContact?.phone || messageContact?.number);
+    if (phone) return phone.startsWith('+') ? phone : `+${phone}`;
+
+    return isLidChatId(chat.id) ? getLidFallbackLabel(chat.id) : getChatIdUserPart(chat.id);
+  };
+  const getChatTitle = (chat: InboxChat | null, resolvedPhone?: string) => {
+    if (!chat) return '';
+    const displayName = getChatDisplayName(chat, resolvedPhone);
+    return displayName === chat.id ? chat.id : `${displayName} (${chat.id})`;
+  };
   const getChatWorkflowKey = useCallback(
     (sessionId: string, chatId: string) => `${sessionId}:${chatId}`,
     [],
@@ -1395,9 +1486,7 @@ export function Chats() {
   );
   const directPhoneCandidate = getDirectPhoneCandidate(activeChat);
   const matchingSavedContact =
-    activeChat && !activeChat.isGroup
-      ? savedContacts.find(contact => normalizeContactNumber(contact.number) === normalizeContactNumber(contactPhone || directPhoneCandidate))
-      : null;
+    activeChat && !activeChat.isGroup ? getSavedContactForChat(activeChat, contactPhone || directPhoneCandidate) : null;
   const totalUnread = chats.reduce((sum, chat) => sum + (chat.unreadCount || 0), 0);
   const directChats = chats.filter(chat => !chat.isGroup).length;
   const groupChats = chats.filter(chat => chat.isGroup).length;
@@ -1492,8 +1581,12 @@ export function Chats() {
 
   const filteredChats = chats
     .filter(chat => {
+      const displayName = getChatDisplayName(chat);
       const matchesSearch =
+        displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         chat.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        chat.pushName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        chat.phone?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         chat.sessionName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         chat.id.toLowerCase().includes(searchQuery.toLowerCase());
 
@@ -1798,8 +1891,8 @@ export function Chats() {
                       <div className="chat-item-info">
                         <div className="chat-item-top">
                           <div className="chat-item-heading">
-                            <span className="chat-item-name" title={chat.name || chat.id}>
-                              {chat.name || chat.id.split('@')[0]}
+                            <span className="chat-item-name" title={getChatTitle(chat)}>
+                              {getChatDisplayName(chat)}
                             </span>
                             <span className="chat-session-name">{chat.sessionName}</span>
                           </div>
@@ -1857,7 +1950,7 @@ export function Chats() {
                       {activeChat.isGroup ? <Users size={20} /> : <User size={20} />}
                     </div>
                     <div className="room-contact-info">
-                      <h3>{activeChat.name || activeChat.id.split('@')[0]}</h3>
+                      <h3>{getChatDisplayName(activeChat, contactPhone || directPhoneCandidate)}</h3>
                       <div className="room-contact-meta">
                         <span>{activeChat.sessionName}</span>
                         <span>{activeChat.isGroup ? 'Shared workspace' : '1:1 conversation'}</span>
@@ -2218,7 +2311,7 @@ export function Chats() {
                           name:
                             replyingTo.direction === 'outgoing'
                               ? t('chats.you')
-                              : activeChat.name || activeChat.id.split('@')[0],
+                              : getChatDisplayName(activeChat, contactPhone || directPhoneCandidate),
                         })}
                       </div>
                       <div className="replying-to-body">
@@ -2324,7 +2417,9 @@ export function Chats() {
                           <span className="chat-info-section-title">Overview</span>
                           <div className="chat-info-group">
                             <span className="chat-info-label">Chat name</span>
-                            <div className="chat-info-value">{activeChat.name || activeChat.id.split('@')[0]}</div>
+                            <div className="chat-info-value">
+                              {getChatDisplayName(activeChat, contactPhone || directPhoneCandidate)}
+                            </div>
                           </div>
                           <div className="chat-info-group">
                             <span className="chat-info-label">Chat ID</span>

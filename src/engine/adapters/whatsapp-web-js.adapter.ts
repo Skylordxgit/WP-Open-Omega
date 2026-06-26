@@ -56,6 +56,30 @@ function positiveIntFromEnv(name: string, fallback: number): number {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function userPartFromJid(value: string): string {
+  return value.split('@')[0].split(':')[0];
+}
+
+function isRawChatDisplayName(name: string | undefined, chatId: string): boolean {
+  const trimmed = (name || '').trim();
+  if (!trimmed) return true;
+  const userPart = userPartFromJid(chatId);
+  return (
+    trimmed === chatId ||
+    trimmed === userPart ||
+    /@(?:lid|c\.us|s\.whatsapp\.net|g\.us)$/i.test(trimmed) ||
+    (chatId.endsWith('@lid') && /^\d{8,}$/.test(trimmed))
+  );
+}
+
+function firstReadableChatName(...values: Array<string | undefined>): string | undefined {
+  const chatId = values[1] || '';
+  return values.find(value => {
+    const trimmed = (value || '').trim();
+    return trimmed && !isRawChatDisplayName(trimmed, chatId);
+  })?.trim();
+}
+
 /**
  * Map a whatsapp-web.js MessageAck integer to the neutral DeliveryStatus.
  * wwebjs: -1 ERROR, 0 PENDING, 1 SERVER (sent), 2 DEVICE (delivered), 3 READ, 4 PLAYED.
@@ -1192,14 +1216,49 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
     const chats = await this.client!.getChats();
     // Map the raw whatsapp-web.js chat objects to the library-agnostic ChatSummary
     // shape so that no library types leak past the engine boundary.
-    return chats.map(chat => ({
-      id: chat.id._serialized,
-      name: chat.name,
-      isGroup: chat.isGroup,
-      unreadCount: chat.unreadCount,
-      timestamp: chat.timestamp,
-      lastMessage: chat.lastMessage?.body || undefined,
-    }));
+    return Promise.all(
+      chats.map(async chat => {
+        const chatId = chat.id._serialized;
+        const rawChat = chat as unknown as {
+          getContact?: () => Promise<{ name?: string; pushname?: string; number?: string }>;
+          lastMessage?: { body?: string; _data?: { notifyName?: string } };
+        };
+        const lastMessagePushName = rawChat.lastMessage?._data?.notifyName;
+        const rawName = chat.name;
+        let contactName: string | undefined;
+        let contactPushName: string | undefined;
+        let contactPhone: string | undefined;
+
+        if (isRawChatDisplayName(rawName, chatId) && rawChat.getContact) {
+          try {
+            const contact = await rawChat.getContact();
+            contactName = contact?.name || undefined;
+            contactPushName = contact?.pushname || undefined;
+            contactPhone = contact?.number || undefined;
+          } catch (error) {
+            this.logger.debug(`Unable to enrich chat display name for ${chatId}`, {
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }
+
+        const displayName =
+          firstReadableChatName(rawName, chatId, contactName, contactPushName, lastMessagePushName) ||
+          contactPhone ||
+          userPartFromJid(chatId);
+
+        return {
+          id: chatId,
+          name: displayName,
+          pushName: contactPushName || lastMessagePushName,
+          phone: contactPhone,
+          isGroup: chat.isGroup,
+          unreadCount: chat.unreadCount,
+          timestamp: chat.timestamp,
+          lastMessage: rawChat.lastMessage?.body || undefined,
+        };
+      }),
+    );
   }
 
   async sendSeen(chatId: string): Promise<boolean> {

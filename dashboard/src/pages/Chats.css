@@ -200,8 +200,27 @@
   transition: 0.18s ease;
 }
 
+/* Keep the rail action icons visible regardless of inherited theme color/state. */
+.chats-rail-brand-icon svg,
+.chats-rail-nav-item svg {
+  flex-shrink: 0;
+  color: currentColor;
+  stroke: currentColor;
+  stroke-width: 2.15;
+  opacity: 1;
+}
+
+.chats-rail-brand-icon {
+  color: #f4fbff;
+}
+
+.chats-rail-nav-item {
+  color: #b8c6d9;
+}
+
 .chats-rail-nav-item:hover {
   background: rgba(255, 255, 255, 0.05);
+  color: #ecf4ff;
 }
 
 .chats-rail-nav-item.active {
@@ -214,6 +233,14 @@
   align-items: center;
   gap: 0.6rem;
   font-weight: 600;
+}
+
+.chats-rail-nav-item > span:last-child {
+  color: var(--chats-text);
+}
+
+.chats-rail-nav-item.active > span:last-child {
+  color: #f4fff8;
 }
 
 .chats-inbox {

@@ -123,9 +123,13 @@ export class BaileysSessionStore {
 
   private toNeutralChat(c: Chat): ChatSummary {
     const last = this.lastMessages.get(c.id);
+    const contact = this.contacts.get(c.id);
+    const phone = this.resolvePhone(c.id) ?? undefined;
     return {
       id: c.id,
-      name: c.name ?? this.userPart(c.id),
+      name: c.name ?? contact?.name ?? contact?.verifiedName ?? contact?.notify ?? phone ?? this.userPart(c.id),
+      pushName: contact?.notify,
+      phone,
       isGroup: c.id.endsWith('@g.us'),
       unreadCount: c.unreadCount ?? 0,
       timestamp: last?.timestamp ?? this.toUnixSeconds(c.conversationTimestamp),

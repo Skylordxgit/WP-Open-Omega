@@ -440,6 +440,15 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
             if (incoming.quotedMessage) {
               metadata.quotedMessage = incoming.quotedMessage;
             }
+            if (incoming.contact) {
+              metadata.contact = incoming.contact;
+            }
+            if (incoming.senderPhone) {
+              metadata.senderPhone = incoming.senderPhone;
+            }
+            if (incoming.mentionedIds?.length) {
+              metadata.mentionedIds = incoming.mentionedIds;
+            }
 
             const dbMessage = this.messageRepository.create({
               sessionId: id,
@@ -916,9 +925,18 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
         continue;
       }
 
+      const metadata = (message.metadata || {}) as {
+        contact?: { name?: string; pushName?: string };
+        senderPhone?: string | null;
+      };
+      const contactName = metadata.contact?.name || metadata.contact?.pushName;
+      const resolvedPhone = metadata.senderPhone || undefined;
+
       chats.set(message.chatId, {
         id: message.chatId,
-        name: message.chatId,
+        name: contactName || resolvedPhone || message.chatId,
+        pushName: metadata.contact?.pushName,
+        phone: resolvedPhone,
         isGroup: message.chatId.endsWith('@g.us'),
         unreadCount: 0,
         timestamp:
