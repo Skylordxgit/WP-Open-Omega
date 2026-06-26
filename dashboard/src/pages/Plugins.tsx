@@ -164,11 +164,15 @@ export default function Plugins() {
 
   if (loading) {
     return (
-      <div
-        className="plugins-page"
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '400px' }}
-      >
-        <Loader2 className="animate-spin" size={32} />
+      <div className="plugins-page" aria-busy="true" aria-label="Loading">
+        <div className="skeleton skeleton-line" style={{ width: '30%', height: 30, marginBottom: '0.6rem' }} />
+        <div className="skeleton skeleton-line" style={{ width: '48%', marginBottom: '1.75rem' }} />
+        <div className="skeleton-card-grid">
+          <div className="skeleton skeleton-card" />
+          <div className="skeleton skeleton-card" />
+          <div className="skeleton skeleton-card" />
+          <div className="skeleton skeleton-card" />
+        </div>
       </div>
     );
   }

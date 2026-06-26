@@ -242,8 +242,10 @@ export function BulkMessaging() {
 
   if (loadingSessions) {
     return (
-      <div className="bulk-messaging bulk-messaging--loading">
-        <Loader2 className="animate-spin" size={32} />
+      <div className="bulk-messaging" aria-busy="true" aria-label="Loading">
+        <div className="skeleton skeleton-line" style={{ width: '32%', height: 30, marginBottom: '0.6rem' }} />
+        <div className="skeleton skeleton-line" style={{ width: '50%', marginBottom: '1.75rem' }} />
+        <div className="skeleton" style={{ height: 320 }} />
       </div>
     );
   }

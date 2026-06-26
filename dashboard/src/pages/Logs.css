@@ -51,6 +51,15 @@
   background: var(--bg-white);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.search-input:focus-within {
+  border-color: var(--primary-border);
+  box-shadow: 0 0 0 4px var(--primary-soft);
 }
 
 .search-input svg {

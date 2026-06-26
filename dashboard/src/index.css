@@ -164,6 +164,13 @@ textarea:focus {
   box-shadow: 0 0 0 4px var(--primary-soft);
 }
 
+/* Inputs nested in a bordered search wrapper get their ring on the WRAPPER (focus-within), so
+   suppress the per-input ring there to avoid a double ring. */
+.search-input input:focus,
+.chat-search-input input:focus {
+  box-shadow: none;
+}
+
 /* GLOBAL MODAL STYLES */
 
 /* Modal Overlay */
@@ -382,6 +389,16 @@ textarea:focus {
 
 .skeleton-line {
   height: 13px;
+}
+
+.skeleton-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1.5rem;
+}
+
+.skeleton-card {
+  height: 168px;
 }
 
 /* Code element styling */
