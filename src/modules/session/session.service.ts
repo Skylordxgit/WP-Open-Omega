@@ -934,7 +934,7 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
     return [...chats.values()].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
   }
 
-  /** Build the persisted `metadata` blob (media / quoted message) for an engine message, or undefined. */
+  /** Build the persisted `metadata` blob (media / quoted message / resolved LID phone), or undefined. */
   private buildMessageMetadata(incoming: IncomingMessage): Record<string, unknown> | undefined {
     const metadata: Record<string, unknown> = {};
     if (incoming.media) {
@@ -942,6 +942,12 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
     }
     if (incoming.quotedMessage) {
       metadata.quotedMessage = incoming.quotedMessage;
+    }
+    // Persist the resolved phone for privacy-id (@lid) senders so downstream readers (e.g. the
+    // dashboard analytics, which run from stored rows with no live engine) can map a LID chat back
+    // to a real phone/contact without re-querying the engine.
+    if (incoming.senderPhone) {
+      metadata.senderPhone = incoming.senderPhone;
     }
     return Object.keys(metadata).length > 0 ? metadata : undefined;
   }

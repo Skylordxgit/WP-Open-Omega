@@ -137,12 +137,16 @@ export const MEDIA_AVAILABLE_LABELS: Record<string, string> = {
 export const stripJidSuffix = (id: string): string => (id ? id.split('@')[0] : '');
 
 // Single source of truth for how a contact/chat is displayed across the app
-// (Chats, Dashboard analytics, bulk results). Shows the resolved contact name or
-// phone when available, otherwise the WhatsApp id with its suffix removed — so a
-// raw `…@lid` / `…@c.us` is never rendered. Reused everywhere; do not duplicate.
+// (Chats, Dashboard analytics, bulk results). Priority: resolved contact name /
+// phone (passed in) → for plain phone JIDs the suffix-stripped number → for an
+// unresolvable privacy id (`@lid`) the label "Unknown contact". A raw `…@lid`
+// number or `…@c.us` is never rendered. Reused everywhere; do not duplicate.
+export const UNKNOWN_CONTACT_LABEL = 'Unknown contact';
 export const formatContactDisplay = (name: string | null | undefined, id: string): string => {
   const trimmed = name?.trim();
   if (trimmed) return trimmed;
+  // A bare LID number is meaningless to a human — show a friendly placeholder instead.
+  if (id && id.includes('@lid')) return UNKNOWN_CONTACT_LABEL;
   return stripJidSuffix(id);
 };
 

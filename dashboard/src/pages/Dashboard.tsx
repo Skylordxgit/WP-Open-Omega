@@ -36,6 +36,11 @@ function formatDuration(seconds: number | null): string {
   return `${h}h ${m}m`;
 }
 
+// True when an @lid chat could not be resolved to a name/phone (shown as "Unknown contact").
+function isUnresolvedLid(contactName: string | null, chatId: string): boolean {
+  return !contactName && chatId.includes('@lid');
+}
+
 function formatTime(iso: string): string {
   const d = new Date(iso);
   const diff = Date.now() - d.getTime();
@@ -297,7 +302,10 @@ export function Dashboard() {
                   </span>
                   <div className="list-main">
                     <span className="list-title">{formatContactDisplay(ch.contactName, ch.chatId)}</span>
-                    <span className="list-sub">{ch.sessionName} · {ch.messageCount} msg</span>
+                    <span className="list-sub">
+                      {ch.sessionName} · {ch.messageCount} msg
+                      {isUnresolvedLid(ch.contactName, ch.chatId) && <span className="lid-hint"> · LID unresolved</span>}
+                    </span>
                   </div>
                   <span className="list-time">{formatTime(ch.lastMessageAt)}</span>
                 </li>
@@ -320,7 +328,10 @@ export function Dashboard() {
                   <span className="dir-pill incoming"><ArrowDownLeft size={14} /></span>
                   <div className="list-main">
                     <span className="list-title">{formatContactDisplay(ch.contactName, ch.chatId)}</span>
-                    <span className="list-sub">{ch.sessionName} · {ch.incomingCount} incoming</span>
+                    <span className="list-sub">
+                      {ch.sessionName} · {ch.incomingCount} incoming
+                      {isUnresolvedLid(ch.contactName, ch.chatId) && <span className="lid-hint"> · LID unresolved</span>}
+                    </span>
                   </div>
                   <span className="list-time warn">waiting {formatDuration(ch.waitingSeconds)}</span>
                 </li>
@@ -343,7 +354,10 @@ export function Dashboard() {
                   <span className="rank">{i + 1}</span>
                   <div className="list-main">
                     <span className="list-title">{formatContactDisplay(ct.contactName, ct.chatId)}</span>
-                    <span className="list-sub">{ct.sessionName}</span>
+                    <span className="list-sub">
+                      {ct.sessionName}
+                      {isUnresolvedLid(ct.contactName, ct.chatId) && <span className="lid-hint"> · LID unresolved</span>}
+                    </span>
                   </div>
                   <span className="list-time">{ct.messageCount.toLocaleString()} msg</span>
                 </li>

@@ -5,6 +5,7 @@ import { Session, SessionStatus } from '../session/entities/session.entity';
 import { Message, MessageDirection, MessageStatus } from '../message/entities/message.entity';
 import { MessageBatch } from '../message/entities/message-batch.entity';
 import { SavedContact } from '../contact/entities/saved-contact.entity';
+import { SessionService } from '../session/session.service';
 
 /** Message types that count as "media" for the media-messages metric. */
 const MEDIA_TYPES = new Set(['image', 'video', 'audio', 'voice', 'ptt', 'document', 'sticker']);
@@ -120,32 +121,94 @@ export class DashboardService {
     private readonly batchRepo: Repository<MessageBatch>,
     @InjectRepository(SavedContact, 'data')
     private readonly savedContactRepo: Repository<SavedContact>,
+    private readonly sessionService: SessionService,
   ) {}
 
   /**
-   * Build a per-session lookup of digits-only phone number → saved contact name.
-   * Used to resolve a chat's saved contact name; the frontend's shared
-   * formatContactDisplay handles the phone/strip-suffix fallback.
+   * Build the contact-display resolver for one analytics request. It resolves a
+   * chat to the best display string with this priority:
+   *   1. Saved contact name (matched by phone number)
+   *   2. Real phone number
+   * For `@lid` privacy-id chats the phone is found from (a) the senderPhone
+   * persisted on stored messages, then (b) a best-effort live-engine lookup
+   * (only when the session is connected), cached per LID. When a `@lid` chat
+   * cannot be resolved the resolver returns null, and the frontend renders
+   * "Unknown contact" rather than the raw LID number.
+   *
+   * @param messages today's messages (already loaded) — source of persisted senderPhone.
    */
-  private async buildContactNameResolver(): Promise<(sessionId: string, chatId: string) => string | null> {
+  private async buildContactNameResolver(
+    messages: MsgRow[],
+  ): Promise<(sessionId: string, chatId: string) => string | null> {
+    // Saved contacts keyed by session → digits-only number → name.
     const contacts = await this.savedContactRepo.find();
-    const bySession = new Map<string, Map<string, string>>();
+    const savedBySession = new Map<string, Map<string, string>>();
     for (const ct of contacts) {
       if (!ct.name) continue;
       const digits = (ct.number || '').replace(/\D/g, '');
       if (!digits) continue;
-      let map = bySession.get(ct.sessionId);
+      let map = savedBySession.get(ct.sessionId);
       if (!map) {
         map = new Map();
-        bySession.set(ct.sessionId, map);
+        savedBySession.set(ct.sessionId, map);
       }
       if (!map.has(digits)) map.set(digits, ct.name);
     }
+
+    // LID → phone from senderPhone persisted on stored messages (works offline).
+    const lidPhone = new Map<string, string>(); // key `${sessionId}::${chatId}`
+    for (const m of messages) {
+      if (!m.chatId.endsWith('@lid')) continue;
+      const phone = m.metadata && typeof m.metadata.senderPhone === 'string' ? m.metadata.senderPhone : null;
+      if (phone) lidPhone.set(`${m.sessionId}::${m.chatId}`, phone.replace(/\D/g, ''));
+    }
+
+    // Best-effort live-engine resolution for the remaining unresolved @lid chats,
+    // cached per LID. Skipped entirely when the session has no connected engine.
+    const engineLid = new Map<string, { phone: string | null; name: string | null }>();
+    const unresolvedLids = new Set<string>();
+    for (const m of messages) {
+      const key = `${m.sessionId}::${m.chatId}`;
+      if (m.chatId.endsWith('@lid') && !lidPhone.has(key)) unresolvedLids.add(key);
+    }
+    for (const key of unresolvedLids) {
+      const sep = key.indexOf('::');
+      const sessionId = key.slice(0, sep);
+      const chatId = key.slice(sep + 2);
+      let phone: string | null = null;
+      let name: string | null = null;
+      const engine = this.sessionService.getEngine(sessionId);
+      if (engine) {
+        try {
+          phone = (await engine.resolveContactPhone(chatId)) ?? null;
+        } catch {
+          phone = null;
+        }
+        try {
+          const contact = await engine.getContactById(chatId);
+          name = contact?.name || contact?.pushName || null;
+        } catch {
+          name = null;
+        }
+      }
+      engineLid.set(key, { phone: phone ? phone.replace(/\D/g, '') : null, name });
+    }
+
+    const savedNameForPhone = (sessionId: string, digits: string): string | null =>
+      digits ? (savedBySession.get(sessionId)?.get(digits) ?? null) : null;
+
     return (sessionId: string, chatId: string): string | null => {
-      const local = chatId.split('@')[0];
-      const digits = local.replace(/\D/g, '');
-      if (!digits) return null;
-      return bySession.get(sessionId)?.get(digits) ?? null;
+      if (chatId.endsWith('@lid')) {
+        const key = `${sessionId}::${chatId}`;
+        const phone = lidPhone.get(key) ?? engineLid.get(key)?.phone ?? null;
+        const engineName = engineLid.get(key)?.name ?? null;
+        // Priority: saved name → engine contact name → phone → null (Unknown contact).
+        return savedNameForPhone(sessionId, phone || '') ?? engineName ?? phone ?? null;
+      }
+      // Non-LID (@c.us / @s.whatsapp.net): local part is the phone. Saved name if any,
+      // else null so the frontend shows the (suffix-stripped) phone number.
+      const digits = chatId.split('@')[0].replace(/\D/g, '');
+      return savedNameForPhone(sessionId, digits);
     };
   }
 
@@ -161,7 +224,6 @@ export class DashboardService {
     const sessions = await this.sessionRepo.find();
     const sessionNames = new Map(sessions.map(s => [s.id, s.name]));
     const activeSessions = sessions.filter(s => s.status === SessionStatus.READY).length;
-    const resolveContactName = await this.buildContactNameResolver();
 
     // Pull today's messages once and aggregate in memory. This keeps all
     // date/hour bucketing in the server's local timezone (JS Date) and avoids
@@ -171,6 +233,9 @@ export class DashboardService {
       select: ['id', 'sessionId', 'chatId', 'from', 'to', 'type', 'body', 'direction', 'status', 'createdAt', 'metadata'],
       order: { createdAt: 'ASC' },
     })) as unknown as MsgRow[];
+
+    // Contact-display resolver (saved name → phone → LID resolution; Unknown contact otherwise).
+    const resolveContactName = await this.buildContactNameResolver(messages);
 
     const incomingVsOutgoing = { incoming: 0, outgoing: 0 };
     const hourly = Array.from({ length: 24 }, (_, hour) => ({ hour, incoming: 0, outgoing: 0 }));

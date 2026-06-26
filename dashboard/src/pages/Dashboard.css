@@ -476,6 +476,12 @@
   font-weight: 600;
 }
 
+.lid-hint {
+  color: var(--text-muted);
+  font-style: italic;
+  opacity: 0.85;
+}
+
 /* ── Responsive ── */
 @media (max-width: 1200px) {
   .kpi-grid { grid-template-columns: repeat(3, 1fr); }
