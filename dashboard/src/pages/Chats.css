@@ -218,6 +218,14 @@
   color: #b8c6d9;
 }
 
+.chats-rail-nav-item > span:last-child {
+  flex: 0 0 auto;
+  min-width: 1.55rem;
+  text-align: center;
+  position: relative;
+  z-index: 1;
+}
+
 .chats-rail-nav-item:hover {
   background: rgba(255, 255, 255, 0.05);
   color: #ecf4ff;
@@ -233,6 +241,27 @@
   align-items: center;
   gap: 0.6rem;
   font-weight: 600;
+  flex: 1 1 auto;
+  min-width: 22px;
+  overflow: hidden;
+}
+
+.chats-rail-nav-main svg {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  flex: 0 0 20px;
+  display: block;
+  color: #e9f6ff;
+  stroke: #e9f6ff;
+  filter: drop-shadow(0 0 6px rgba(83, 189, 235, 0.25));
+}
+
+.chats-rail-nav-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chats-rail-nav-item > span:last-child {

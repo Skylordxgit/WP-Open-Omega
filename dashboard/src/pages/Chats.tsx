@@ -1791,7 +1791,7 @@ export function Chats() {
                 >
                   <span className="chats-rail-nav-main">
                     <MessageSquare size={18} />
-                    All
+                    <span className="chats-rail-nav-label">All</span>
                   </span>
                   <span>{filteredChats.length}</span>
                 </button>
@@ -1802,7 +1802,7 @@ export function Chats() {
                 >
                   <span className="chats-rail-nav-main">
                     <Clock3 size={18} />
-                    Unread
+                    <span className="chats-rail-nav-label">Unread</span>
                   </span>
                   <span>{totalUnread}</span>
                 </button>
@@ -1813,7 +1813,7 @@ export function Chats() {
                 >
                   <span className="chats-rail-nav-main">
                     <Phone size={18} />
-                    Direct
+                    <span className="chats-rail-nav-label">Direct</span>
                   </span>
                   <span>{directChats}</span>
                 </button>
@@ -1824,7 +1824,7 @@ export function Chats() {
                 >
                   <span className="chats-rail-nav-main">
                     <Users size={18} />
-                    Groups
+                    <span className="chats-rail-nav-label">Groups</span>
                   </span>
                   <span>{groupChats}</span>
                 </button>
