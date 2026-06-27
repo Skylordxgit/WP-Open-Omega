@@ -1242,6 +1242,10 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
           }
         }
 
+        if (!contactPhone && chatId.endsWith('@lid')) {
+          contactPhone = (await this.resolveContactPhone(chatId)) || undefined;
+        }
+
         const displayName =
           firstReadableChatName(rawName, chatId, contactName, contactPushName, lastMessagePushName) ||
           contactPhone ||

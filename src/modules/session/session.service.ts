@@ -426,10 +426,10 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
             // Persist the incoming message so the dashboard chats view can render history.
             const incoming: IncomingMessage = finalMessage;
 
-            // Inline @lid -> phone resolution (#263), opt-in via RESOLVE_LID_TO_PHONE. Best-effort:
-            // attaches senderPhone (digits or null) before persist/dispatch so webhook/ws consumers
-            // get it in a single pass. Only for privacy-id senders, so no lookup for normal numbers.
-            if (process.env.RESOLVE_LID_TO_PHONE === 'true' && incoming.isLidSender && !incoming.fromMe) {
+            // Inline @lid -> phone resolution (#263). Best-effort and cached: attaches senderPhone
+            // before persist/dispatch so dashboard/webhook consumers do not have to display raw LIDs.
+            // Only privacy-id senders are queried, so normal phone JIDs skip this path.
+            if (incoming.isLidSender && !incoming.fromMe) {
               incoming.senderPhone = await this.resolveSenderPhone(id, incoming.author ?? incoming.from);
             }
 

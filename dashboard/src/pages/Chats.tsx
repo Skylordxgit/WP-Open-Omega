@@ -406,6 +406,28 @@ const CHAT_STATUS_STORAGE_KEY = 'openwa_chat_statuses_v1';
 const normalizeContactNumber = (value?: string | null) => (value || '').replace(/[^0-9+]/g, '').trim();
 const getChatIdUserPart = (value?: string | null) => (value || '').split('@')[0].split(':')[0];
 const isLidChatId = (value?: string | null) => /@lid$/i.test(value || '');
+const getChatPhoneKey = (sessionId: string, chatId: string) => `${sessionId}:${chatId}`;
+
+const formatDisplayPhone = (value?: string | null) => {
+  const normalized = normalizeContactNumber(value);
+  if (!normalized) return '';
+  const digits = normalized.replace(/\D/g, '');
+  if (!digits) return '';
+
+  if (digits.length === 11 && digits.startsWith('1')) {
+    return `+1 (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`;
+  }
+  if (digits.length === 10 && !normalized.startsWith('+')) {
+    return `+1 (${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+  if (digits.startsWith('44') && digits.length >= 11) {
+    return `+44 ${digits.slice(2, 6)} ${digits.slice(6)}`;
+  }
+  if (digits.startsWith('65') && digits.length === 10) {
+    return `+65 ${digits.slice(2, 6)} ${digits.slice(6)}`;
+  }
+  return `+${digits}`;
+};
 
 const isRawWhatsAppIdentifier = (value?: string | null, chatId?: string | null) => {
   const trimmed = (value || '').trim();
@@ -420,9 +442,7 @@ const isRawWhatsAppIdentifier = (value?: string | null, chatId?: string | null) 
 };
 
 const getLidFallbackLabel = (chatId: string) => {
-  const userPart = getChatIdUserPart(chatId);
-  const shortId = userPart ? userPart.slice(-6) : '';
-  return shortId ? `WhatsApp private ID ${shortId}` : 'WhatsApp private contact';
+  return isLidChatId(chatId) ? 'Resolving WhatsApp number...' : getChatIdUserPart(chatId);
 };
 
 const getDirectPhoneCandidate = (chat: Chat | null) =>
@@ -560,6 +580,7 @@ export function Chats() {
   const [showEmojiPicker, setShowEmojiPicker] = useState<boolean>(false);
   const [showChatInfo, setShowChatInfo] = useState<boolean>(false);
   const [activeMediaPreview, setActiveMediaPreview] = useState<ResolvedMediaAttachment | null>(null);
+  const [chatPhoneByKey, setChatPhoneByKey] = useState<Record<string, string | null>>({});
   const [contactPhone, setContactPhone] = useState<string>('');
   const [loadingContactPhone, setLoadingContactPhone] = useState<boolean>(false);
   const [contactEmailInput, setContactEmailInput] = useState<string>('');
@@ -575,6 +596,7 @@ export function Chats() {
   const chatBottomRef = useRef<HTMLDivElement | null>(null);
   const messageLoadRequestRef = useRef(0);
   const skipNextAutoScrollRef = useRef(false);
+  const resolvingChatPhonesRef = useRef<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [replyingTo, setReplyingTo] = useState<ChatMessageView | null>(null);
 
@@ -770,6 +792,54 @@ export function Chats() {
       setMessages([]);
     }
   }, [selectedChannelIds, selectedSessionId, loadChats]);
+
+  useEffect(() => {
+    const candidates = chats
+      .filter(chat => !chat.isGroup && isLidChatId(chat.id))
+      .filter(chat => {
+        const key = getChatPhoneKey(chat.sessionId, chat.id);
+        return !(key in chatPhoneByKey) && !resolvingChatPhonesRef.current.has(key);
+      })
+      .slice(0, 25);
+
+    if (candidates.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+    for (const chat of candidates) {
+      resolvingChatPhonesRef.current.add(getChatPhoneKey(chat.sessionId, chat.id));
+    }
+
+    void Promise.all(
+      candidates.map(async chat => {
+        const key = getChatPhoneKey(chat.sessionId, chat.id);
+        try {
+          const result = await contactApi.resolvePhone(chat.sessionId, chat.id);
+          return { key, phone: normalizeContactNumber(result.phone) || null };
+        } catch {
+          return { key, phone: null };
+        }
+      }),
+    ).then(results => {
+      if (!cancelled) {
+        setChatPhoneByKey(current => {
+          const next = { ...current };
+          for (const result of results) {
+            next[result.key] = result.phone;
+          }
+          return next;
+        });
+      }
+      for (const result of results) {
+        resolvingChatPhonesRef.current.delete(result.key);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [chatPhoneByKey, chats]);
 
   useEffect(() => {
     if (!activeSessionId) {
@@ -1451,29 +1521,38 @@ export function Chats() {
     return null;
   };
   const getSavedContactForChat = (chat: Chat, resolvedPhone?: string) => {
-    const phone = normalizeContactNumber(resolvedPhone || chat.phone || getDirectPhoneCandidate(chat));
+    const phone = normalizeContactNumber(
+      resolvedPhone ||
+        ('sessionId' in chat ? chatPhoneByKey[getChatPhoneKey((chat as InboxChat).sessionId, chat.id)] : '') ||
+        chat.phone ||
+        getDirectPhoneCandidate(chat),
+    );
     return phone ? savedContacts.find(contact => normalizeContactNumber(contact.number) === phone) || null : null;
   };
   const getChatDisplayName = (chat: InboxChat | null, resolvedPhone?: string) => {
     if (!chat) return '';
+    const resolvedListPhone = chatPhoneByKey[getChatPhoneKey(chat.sessionId, chat.id)];
     const savedContact = getSavedContactForChat(chat, resolvedPhone);
     const messageContact = getActiveMessageContactInfo(chat);
     const readableName =
+      savedContact?.name ||
       (!isRawWhatsAppIdentifier(chat.name, chat.id) && chat.name) ||
       (!isRawWhatsAppIdentifier(chat.pushName, chat.id) && chat.pushName) ||
-      savedContact?.name ||
       (!isRawWhatsAppIdentifier(messageContact?.name, chat.id) && messageContact?.name) ||
       (!isRawWhatsAppIdentifier(messageContact?.pushName, chat.id) && messageContact?.pushName);
     if (readableName) return readableName;
 
-    const phone = normalizeContactNumber(resolvedPhone || chat.phone || messageContact?.phone || messageContact?.number);
-    if (phone) return phone.startsWith('+') ? phone : `+${phone}`;
+    const phone = normalizeContactNumber(
+      resolvedPhone || resolvedListPhone || chat.phone || messageContact?.phone || messageContact?.number,
+    );
+    if (phone) return formatDisplayPhone(phone);
 
     return isLidChatId(chat.id) ? getLidFallbackLabel(chat.id) : getChatIdUserPart(chat.id);
   };
   const getChatTitle = (chat: InboxChat | null, resolvedPhone?: string) => {
     if (!chat) return '';
     const displayName = getChatDisplayName(chat, resolvedPhone);
+    if (isLidChatId(chat.id)) return displayName;
     return displayName === chat.id ? chat.id : `${displayName} (${chat.id})`;
   };
   const getChatWorkflowKey = useCallback(
@@ -1498,6 +1577,7 @@ export function Chats() {
   const activeChatMessageCount = messages.length;
   const activeChatUnread = activeChat?.unreadCount || 0;
   const activeChatLifecycle = activeChat ? getChatLifecycle(activeChat.sessionId, activeChat.id) : 'open';
+  const activeChatResolvedPhone = activeChat ? chatPhoneByKey[getChatPhoneKey(activeChat.sessionId, activeChat.id)] : undefined;
   const selectedChannelSummary =
     selectedChannelIds.length === sessions.length
       ? 'All channels'
@@ -1506,7 +1586,13 @@ export function Chats() {
         : selectedChannels.map(session => session.name).join(', ');
   const channelMenuTitle = `All channels ${sessions.length}`;
   const infoPanelPhone =
-    activeChat?.isGroup ? 'Not available for groups' : loadingContactPhone ? 'Resolving...' : contactPhone || 'Not available';
+    activeChat?.isGroup
+      ? 'Not available for groups'
+      : loadingContactPhone
+        ? 'Resolving...'
+        : contactPhone
+          ? formatDisplayPhone(contactPhone)
+          : 'Not available';
   const infoPanelEmail = matchingSavedContact?.email || '';
 
   const toggleChannelSelection = (sessionId: string) => {
@@ -1525,14 +1611,21 @@ export function Chats() {
       return;
     }
 
-    const fallbackPhone = getDirectPhoneCandidate(activeChat);
+    const activeKey = getChatPhoneKey(activeChat.sessionId, activeChat.id);
+    const fallbackPhone = normalizeContactNumber(activeChatResolvedPhone || getDirectPhoneCandidate(activeChat));
     setContactPhone(fallbackPhone);
     setLoadingContactPhone(true);
 
     contactApi
       .resolvePhone(activeChat.sessionId, activeChat.id)
       .then(result => {
-        setContactPhone(normalizeContactNumber(result.phone) || fallbackPhone);
+        const resolvedPhone = normalizeContactNumber(result.phone) || fallbackPhone;
+        setContactPhone(resolvedPhone);
+        if (resolvedPhone) {
+          setChatPhoneByKey(current =>
+            current[activeKey] === resolvedPhone ? current : { ...current, [activeKey]: resolvedPhone },
+          );
+        }
       })
       .catch(() => {
         setContactPhone(fallbackPhone);
@@ -1540,7 +1633,7 @@ export function Chats() {
       .finally(() => {
         setLoadingContactPhone(false);
       });
-  }, [activeChat]);
+  }, [activeChat, activeChatResolvedPhone]);
 
   useEffect(() => {
     setContactEmailInput(matchingSavedContact?.email || '');
@@ -2422,8 +2515,12 @@ export function Chats() {
                             </div>
                           </div>
                           <div className="chat-info-group">
-                            <span className="chat-info-label">Chat ID</span>
-                            <code className="chat-info-value">{activeChat.id}</code>
+                            <span className="chat-info-label">{isLidChatId(activeChat.id) ? 'WhatsApp ID' : 'Chat ID'}</span>
+                            <code className="chat-info-value">
+                              {isLidChatId(activeChat.id)
+                                ? 'Private ID hidden. Phone number shown above when available.'
+                                : activeChat.id}
+                            </code>
                           </div>
                           <div className="chat-info-group">
                             <span className="chat-info-label">Phone number</span>
