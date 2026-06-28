@@ -8,8 +8,10 @@ import {
   infraApi,
   pluginsApi,
   dashboardApi,
+  labelApi,
   type Webhook,
   type TemplatePayload,
+  type LabelPayload,
 } from '../services/api';
 
 // ── Query Keys ────────────────────────────────────────────────────────
@@ -28,7 +30,91 @@ export const queryKeys = {
   engines: ['engines'] as const,
   currentEngine: ['engines', 'current'] as const,
   dashboardAnalytics: (date?: string) => ['dashboard', 'analytics', date ?? 'today'] as const,
+  labels: ['labels'] as const,
+  sessionLabels: (sessionId: string) => ['labels', 'session', sessionId] as const,
+  allChatLabels: ['labels', 'assignments'] as const,
 };
+
+// ── Chat Label Queries ────────────────────────────────────────────────
+
+export function useLabelsQuery() {
+  return useQuery({
+    queryKey: queryKeys.labels,
+    queryFn: labelApi.list,
+    staleTime: 30_000,
+  });
+}
+
+export function useSessionLabelsQuery(sessionId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.sessionLabels(sessionId ?? 'none'),
+    queryFn: () => labelApi.forSession(sessionId as string),
+    enabled: !!sessionId,
+    staleTime: 15_000,
+  });
+}
+
+export function useAllChatLabelsQuery() {
+  return useQuery({
+    queryKey: queryKeys.allChatLabels,
+    queryFn: labelApi.allAssignments,
+    staleTime: 15_000,
+  });
+}
+
+export function useCreateLabelMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: LabelPayload) => labelApi.create(data),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.labels }),
+  });
+}
+
+export function useUpdateLabelMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (params: { id: string; data: Partial<LabelPayload> }) => labelApi.update(params.id, params.data),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.labels });
+      void queryClient.invalidateQueries({ queryKey: ['labels', 'session'] });
+    },
+  });
+}
+
+export function useDeleteLabelMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => labelApi.delete(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.labels });
+      void queryClient.invalidateQueries({ queryKey: ['labels', 'session'] });
+    },
+  });
+}
+
+export function useAssignLabelMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (params: { sessionId: string; chatId: string; labelId: string }) =>
+      labelApi.assign(params.sessionId, params.chatId, params.labelId),
+    onSuccess: (_d, params) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sessionLabels(params.sessionId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.allChatLabels });
+    },
+  });
+}
+
+export function useUnassignLabelMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (params: { sessionId: string; chatId: string; labelId: string }) =>
+      labelApi.unassign(params.sessionId, params.chatId, params.labelId),
+    onSuccess: (_d, params) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sessionLabels(params.sessionId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.allChatLabels });
+    },
+  });
+}
 
 // ── Dashboard Analytics ───────────────────────────────────────────────
 

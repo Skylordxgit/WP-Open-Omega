@@ -1,7 +1,8 @@
-import { memo } from 'react';
-import { Users, User, X, Phone, AtSign, Hash, Tag, BarChart3, Image as ImageIcon, FileText, StickyNote } from 'lucide-react';
+import { memo, useState } from 'react';
+import { Users, User, X, Phone, AtSign, Hash, BarChart3, Image as ImageIcon, FileText, StickyNote, Copy, Check } from 'lucide-react';
 import type { ChatWithSession } from './types';
-import { formatContactDisplay } from './helpers';
+import { formatContactDisplay, chatType, formatPhoneDigits } from './helpers';
+import { LabelsSection } from './LabelsSection';
 
 interface InfoPanelProps {
   chat: ChatWithSession;
@@ -42,6 +43,18 @@ export const InfoPanel = memo(function InfoPanel({
   noPhoneLabel,
   onClose,
 }: InfoPanelProps) {
+  const [copied, setCopied] = useState(false);
+  const displayName = formatContactDisplay(chat.displayName ?? chat.name, chat.id);
+  const type = chatType(chat.id);
+  const resolvedPhone = formatPhoneDigits(phone);
+
+  const copyChatId = () => {
+    void navigator.clipboard?.writeText(chat.id).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+
   return (
     <>
       <div className="chat-info-scrim" onClick={onClose} aria-hidden="true" />
@@ -56,20 +69,18 @@ export const InfoPanel = memo(function InfoPanel({
         <div className="chat-info-body">
           <div className="chat-info-identity">
             <div className="chat-info-avatar">{chat.isGroup ? <Users size={26} /> : <User size={26} />}</div>
-            <div className="chat-info-name">{formatContactDisplay(chat.name, chat.id)}</div>
-            <span className={`chat-info-type ${chat.isGroup ? 'group' : 'direct'}`}>
-              {chat.isGroup ? 'Group chat' : 'Direct chat'}
-            </span>
+            <div className="chat-info-name">{displayName}</div>
+            <span className={`chat-info-type ${type.toLowerCase()}`}>{type} chat</span>
           </div>
 
-          {!chat.isGroup && (
+          {type === 'Direct' && (
             <div className="chat-info-section">
               <div className="chat-info-section-title">
                 <Phone size={12} /> <span>Phone</span>
               </div>
               <div className="chat-info-row">
-                <span>Number</span>
-                <strong className="mono">{phone || '—'}</strong>
+                <span>Phone</span>
+                <strong className="mono">{resolvedPhone || 'Unknown'}</strong>
               </div>
             </div>
           )}
@@ -80,13 +91,18 @@ export const InfoPanel = memo(function InfoPanel({
             </div>
             <div className="chat-info-row">
               <span>Chat ID</span>
-              <strong className="mono" title={chat.id}>
-                {chat.id}
-              </strong>
+              <span className="chat-info-chatid">
+                <strong className="mono" title={chat.id}>
+                  {chat.id}
+                </strong>
+                <button type="button" className="chat-info-copy" onClick={copyChatId} aria-label="Copy chat ID">
+                  {copied ? <Check size={13} /> : <Copy size={13} />}
+                </button>
+              </span>
             </div>
             <div className="chat-info-row">
               <span>Type</span>
-              <strong>{chat.isGroup ? 'Group' : 'Direct'}</strong>
+              <strong>{type}</strong>
             </div>
             <div className="chat-info-row">
               <span>Last activity</span>
@@ -118,12 +134,7 @@ export const InfoPanel = memo(function InfoPanel({
             </div>
           </div>
 
-          <div className="chat-info-section">
-            <div className="chat-info-section-title">
-              <Tag size={12} /> <span>Labels</span>
-            </div>
-            <div className="chat-info-empty">Labels are not available yet.</div>
-          </div>
+          <LabelsSection sessionId={chat.sessionId} chatId={chat.id} />
 
           <div className="chat-info-section">
             <div className="chat-info-section-title">

@@ -27,6 +27,7 @@ import { CacheModule } from './common/cache';
 import { StorageModule } from './common/storage/storage.module';
 import { StatsModule } from './modules/stats/stats.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { ChatLabelModule } from './modules/chat-label/chat-label.module';
 import { MetricsModule } from './modules/metrics/metrics.module';
 import { StatusModule } from './modules/status/status.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
@@ -120,6 +121,7 @@ if (dashboardServingEnabled && dashboardBuildPresent) {
             __dirname + '/modules/webhook/**/*.entity{.ts,.js}',
             __dirname + '/modules/message/**/*.entity{.ts,.js}',
             __dirname + '/modules/template/**/*.entity{.ts,.js}',
+            __dirname + '/modules/chat-label/**/*.entity{.ts,.js}',
             __dirname + '/engine/**/*.entity{.ts,.js}',
           ],
           migrations: [__dirname + '/database/migrations/*{.ts,.js}'],
@@ -219,6 +221,7 @@ if (dashboardServingEnabled && dashboardBuildPresent) {
     ChannelModule, // Phase 3: Channels/Newsletter
     StatsModule, // Phase 3: Statistics Dashboard
     DashboardModule, // Messaging analytics dashboard (today's metrics + charts)
+    ChatLabelModule, // Persistent chat label system (DB-backed, per session+chat)
     MetricsModule, // Prometheus /api/metrics
     StatusModule, // Phase 3: Status/Stories API
     CatalogModule, // Phase 3: Catalog API (WhatsApp Business)

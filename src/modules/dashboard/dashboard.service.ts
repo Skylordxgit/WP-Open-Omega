@@ -4,8 +4,8 @@ import { Between, Repository } from 'typeorm';
 import { Session, SessionStatus } from '../session/entities/session.entity';
 import { Message, MessageDirection, MessageStatus } from '../message/entities/message.entity';
 import { MessageBatch } from '../message/entities/message-batch.entity';
-import { SavedContact } from '../contact/entities/saved-contact.entity';
 import { SessionService } from '../session/session.service';
+import { ContactResolverService } from '../contact-resolver/contact-resolver.service';
 
 /** Message types that count as "media" for the media-messages metric. */
 const MEDIA_TYPES = new Set(['image', 'video', 'audio', 'voice', 'ptt', 'document', 'sticker']);
@@ -119,9 +119,8 @@ export class DashboardService {
     private readonly messageRepo: Repository<Message>,
     @InjectRepository(MessageBatch, 'data')
     private readonly batchRepo: Repository<MessageBatch>,
-    @InjectRepository(SavedContact, 'data')
-    private readonly savedContactRepo: Repository<SavedContact>,
     private readonly sessionService: SessionService,
+    private readonly contactResolver: ContactResolverService,
   ) {}
 
   /**
@@ -140,27 +139,14 @@ export class DashboardService {
   private async buildContactNameResolver(
     messages: MsgRow[],
   ): Promise<(sessionId: string, chatId: string) => string | null> {
-    // Saved contacts keyed by session → digits-only number → name.
-    const contacts = await this.savedContactRepo.find();
-    const savedBySession = new Map<string, Map<string, string>>();
-    for (const ct of contacts) {
-      if (!ct.name) continue;
-      const digits = (ct.number || '').replace(/\D/g, '');
-      if (!digits) continue;
-      let map = savedBySession.get(ct.sessionId);
-      if (!map) {
-        map = new Map();
-        savedBySession.set(ct.sessionId, map);
-      }
-      if (!map.has(digits)) map.set(digits, ct.name);
-    }
+    const savedMap = await this.contactResolver.loadSavedMap();
 
     // LID → phone from senderPhone persisted on stored messages (works offline).
     const lidPhone = new Map<string, string>(); // key `${sessionId}::${chatId}`
     for (const m of messages) {
       if (!m.chatId.endsWith('@lid')) continue;
       const phone = m.metadata && typeof m.metadata.senderPhone === 'string' ? m.metadata.senderPhone : null;
-      if (phone) lidPhone.set(`${m.sessionId}::${m.chatId}`, phone.replace(/\D/g, ''));
+      if (phone) lidPhone.set(`${m.sessionId}::${m.chatId}`, phone);
     }
 
     // Best-effort live-engine resolution for the remaining unresolved @lid chats,
@@ -191,24 +177,20 @@ export class DashboardService {
           name = null;
         }
       }
-      engineLid.set(key, { phone: phone ? phone.replace(/\D/g, '') : null, name });
+      engineLid.set(key, { phone, name });
     }
 
-    const savedNameForPhone = (sessionId: string, digits: string): string | null =>
-      digits ? (savedBySession.get(sessionId)?.get(digits) ?? null) : null;
-
     return (sessionId: string, chatId: string): string | null => {
-      if (chatId.endsWith('@lid')) {
-        const key = `${sessionId}::${chatId}`;
-        const phone = lidPhone.get(key) ?? engineLid.get(key)?.phone ?? null;
-        const engineName = engineLid.get(key)?.name ?? null;
-        // Priority: saved name → engine contact name → phone → null (Unknown contact).
-        return savedNameForPhone(sessionId, phone || '') ?? engineName ?? phone ?? null;
-      }
-      // Non-LID (@c.us / @s.whatsapp.net): local part is the phone. Saved name if any,
-      // else null so the frontend shows the (suffix-stripped) phone number.
-      const digits = chatId.split('@')[0].replace(/\D/g, '');
-      return savedNameForPhone(sessionId, digits);
+      const key = `${sessionId}::${chatId}`;
+      const engine = engineLid.get(key);
+      return this.contactResolver.resolve({
+        sessionId,
+        chatId,
+        savedMap,
+        metaPhone: lidPhone.get(key) ?? null,
+        engineName: engine?.name ?? null,
+        enginePhone: engine?.phone ?? null,
+      }).displayName;
     };
   }
 

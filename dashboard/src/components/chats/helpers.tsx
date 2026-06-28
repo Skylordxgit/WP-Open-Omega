@@ -136,18 +136,63 @@ export const MEDIA_AVAILABLE_LABELS: Record<string, string> = {
 // for display. Presentation only — never mutates stored ids.
 export const stripJidSuffix = (id: string): string => (id ? id.split('@')[0] : '');
 
-// Single source of truth for how a contact/chat is displayed across the app
-// (Chats, Dashboard analytics, bulk results). Priority: resolved contact name /
-// phone (passed in) → for plain phone JIDs the suffix-stripped number → for an
-// unresolvable privacy id (`@lid`) the label "Unknown contact". A raw `…@lid`
-// number or `…@c.us` is never rendered. Reused everywhere; do not duplicate.
-export const UNKNOWN_CONTACT_LABEL = 'Unknown contact';
+export const UNKNOWN_CONTACT_LABEL = 'Unknown Contact';
+
+// Junk values that must never be shown as a contact identity (engines sometimes
+// hand back "0", "Number", etc. for unknown contacts).
+const JUNK_NAMES = new Set(['', '0', 'number', 'null', 'undefined', 'unknown']);
+const cleanName = (name: string | null | undefined): string => {
+  const t = (name ?? '').trim();
+  if (JUNK_NAMES.has(t.toLowerCase())) return '';
+  // A raw JID is never a real contact name — the stored-chat fallback uses the
+  // chatId as `name`, so reject anything containing '@' (e.g. "…@lid", "…@c.us").
+  if (t.includes('@')) return '';
+  return t;
+};
+
+// Render a digits string as a phone number (e.g. "+919702546146"); empty for
+// missing / all-zero values so callers fall through to "Unknown Contact".
+export const formatPhoneDigits = (value: string | null | undefined): string => {
+  const d = (value ?? '').replace(/\D/g, '');
+  return d && !/^0+$/.test(d) ? `+${d}` : '';
+};
+
+// Human label for the chat kind, from the JID suffix.
+export const chatType = (id: string): 'Direct' | 'Group' | 'Broadcast' => {
+  if (!id) return 'Direct';
+  if (id.endsWith('@g.us')) return 'Group';
+  if (id.endsWith('@broadcast')) return 'Broadcast';
+  return 'Direct';
+};
+
+const asNameOrPhone = (value: string): string => {
+  if (/^\d+$/.test(value)) return formatPhoneDigits(value) || UNKNOWN_CONTACT_LABEL;
+  return value;
+};
+
+// Single source of truth for how a contact/chat is displayed across the entire
+// app (Chats list/header/info, dashboard analytics, bulk results, pickers).
+// Priority: resolved contact name → phone number → "Unknown Contact". A raw
+// `@lid` / `@c.us` / `@s.whatsapp.net` suffix, a bare LID number, or junk values
+// like "0"/"Number" are NEVER rendered. Reused everywhere; do not duplicate.
 export const formatContactDisplay = (name: string | null | undefined, id: string): string => {
-  const trimmed = name?.trim();
-  if (trimmed) return trimmed;
-  // A bare LID number is meaningless to a human — show a friendly placeholder instead.
-  if (id && id.includes('@lid')) return UNKNOWN_CONTACT_LABEL;
-  return stripJidSuffix(id);
+  const resolved = cleanName(name);
+  const local = stripJidSuffix(id);
+
+  if (id && id.endsWith('@g.us')) return resolved ? asNameOrPhone(resolved) : 'Group';
+  if (id && id.endsWith('@broadcast')) return resolved ? asNameOrPhone(resolved) : 'Broadcast';
+
+  if (id && id.includes('@lid')) {
+    // The LID itself is never a contact identity. Only a resolved name/phone
+    // (different from the bare LID) may be shown; otherwise "Unknown Contact".
+    if (resolved && resolved !== local) return asNameOrPhone(resolved);
+    return UNKNOWN_CONTACT_LABEL;
+  }
+
+  // Direct / unknown JID: a real name (not just the bare id) wins.
+  if (resolved && resolved !== local) return asNameOrPhone(resolved);
+  // Otherwise fall back to the phone encoded in the JID local part.
+  return formatPhoneDigits(local) || UNKNOWN_CONTACT_LABEL;
 };
 
 export const formatTime = (timestamp?: number) => {

@@ -25,6 +25,7 @@ import { createLogger } from '../../common/services/logger.service';
 import { EventsGateway } from '../events/events.gateway';
 import { WebhookService } from '../webhook/webhook.service';
 import { HookManager } from '../../core/hooks';
+import { ContactResolverService } from '../contact-resolver/contact-resolver.service';
 import {
   deliveryStatusToMessageStatus,
   deliveryStatusToAck,
@@ -76,6 +77,7 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
     private readonly eventsGateway: EventsGateway,
     private readonly webhookService: WebhookService,
     private readonly hookManager: HookManager,
+    private readonly contactResolver: ContactResolverService,
   ) {}
 
   /**
@@ -880,7 +882,10 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
     const engine = this.engines.get(id);
 
     if (!engine) {
-      throw new BadRequestException('Session is not started');
+      // No live engine (session offline): degrade gracefully to stored history so the
+      // chat list still renders resolved contacts/labels instead of failing. The live
+      // send/receive/message-load paths are unaffected.
+      return this.getChatsFromStoredMessages(id);
     }
 
     try {
@@ -912,15 +917,32 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
       .take(SessionService.CHAT_FALLBACK_MESSAGE_SCAN)
       .getMany();
 
+    // Resolve real contact names/phones for the stored fallback so the chat list
+    // never surfaces a raw LID/JID (the live engine path resolves names itself).
+    const savedMap = await this.contactResolver.loadSavedMap();
+
     const chats = new Map<string, ChatSummary>();
     for (const message of messages) {
       if (!message.chatId || chats.has(message.chatId)) {
         continue;
       }
 
+      const metaPhone =
+        message.metadata && typeof message.metadata.senderPhone === 'string'
+          ? (message.metadata.senderPhone as string)
+          : null;
+      const resolved = this.contactResolver.resolve({
+        sessionId,
+        chatId: message.chatId,
+        savedMap,
+        metaPhone,
+      });
+
       chats.set(message.chatId, {
         id: message.chatId,
         name: message.chatId,
+        displayName: resolved.displayName,
+        phone: resolved.phone,
         isGroup: message.chatId.endsWith('@g.us'),
         unreadCount: 0,
         timestamp:

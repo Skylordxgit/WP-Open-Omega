@@ -8,3 +8,5 @@ export { DateSeparator } from './DateSeparator';
 export { ConversationHeader } from './ConversationHeader';
 export { Composer } from './Composer';
 export { InfoPanel } from './InfoPanel';
+export { LabelChip } from './LabelChip';
+export { LabelsSection } from './LabelsSection';

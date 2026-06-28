@@ -1,7 +1,9 @@
 import { memo } from 'react';
 import { Users, User } from 'lucide-react';
 import type { ChatWithSession } from './types';
+import type { Label } from '../../services/api';
 import { formatChatTime, highlightMatch, formatContactDisplay } from './helpers';
+import { LabelChip } from './LabelChip';
 
 interface ChatRowProps {
   chat: ChatWithSession;
@@ -9,21 +11,25 @@ interface ChatRowProps {
   searchQuery: string;
   yesterdayLabel: string;
   noMessageLabel: string;
+  labels?: Label[];
   onSelect: () => void;
 }
 
 // A single dense, WhatsApp-Desktop-style chat list row (~68px): avatar, name, last-message
-// preview, time, unread badge, channel badge, and a selection indicator (left accent bar).
+// preview, time, unread badge, channel badge, label chips, and a selection indicator.
 export const ChatRow = memo(function ChatRow({
   chat,
   isActive,
   searchQuery,
   yesterdayLabel,
   noMessageLabel,
+  labels = [],
   onSelect,
 }: ChatRowProps) {
-  const displayName = formatContactDisplay(chat.name, chat.id);
+  const displayName = formatContactDisplay(chat.displayName ?? chat.name, chat.id);
   const snippet = chat.lastMessage || '';
+  const visibleLabels = labels.slice(0, 2);
+  const extraLabels = labels.length - visibleLabels.length;
 
   return (
     <div
@@ -57,6 +63,14 @@ export const ChatRow = memo(function ChatRow({
             {chat.unreadCount > 0 && <span className="chat-unread-badge">{chat.unreadCount}</span>}
           </div>
         </div>
+        {labels.length > 0 && (
+          <div className="chat-item-labels">
+            {visibleLabels.map(l => (
+              <LabelChip key={l.id} label={l} />
+            ))}
+            {extraLabels > 0 && <span className="chat-item-labels-more">+{extraLabels}</span>}
+          </div>
+        )}
       </div>
     </div>
   );

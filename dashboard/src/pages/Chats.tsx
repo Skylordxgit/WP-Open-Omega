@@ -41,6 +41,7 @@ import {
   type ChatMessageView,
   type MediaDownloadStatus,
 } from '../components/chats';
+import { useAllChatLabelsQuery, useLabelsQuery } from '../hooks/queries';
 import './Chats.css';
 
 interface IncomingWsMessage {
@@ -150,6 +151,11 @@ export function Chats() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState<boolean>(false);
   const [showInfo, setShowInfo] = useState<boolean>(false); // Chat Info drawer (presentational toggle)
+  const [labelFilterId, setLabelFilterId] = useState<string>(''); // '' = no label filter
+
+  // Persistent chat labels (DB-backed). Map keyed `${sessionId}::${chatId}`.
+  const { data: allLabels = [] } = useLabelsQuery();
+  const { data: chatLabelMap = {} } = useAllChatLabelsQuery();
 
   // References
   const chatBottomRef = useRef<HTMLDivElement | null>(null);
@@ -853,7 +859,12 @@ export function Chats() {
   );
 
   // Phone number for a 1:1 chat is encoded in the JID (e.g. 1234567890@c.us). Groups have no number.
-  const activeChatPhone = activeChat && !activeChat.isGroup ? stripJidSuffix(activeChat.id) : '';
+  // Resolved phone digits for the active chat (backend-resolved, else the @c.us
+  // local part). Never the raw LID — InfoPanel formats this and shows "Unknown".
+  const activeChatPhone = activeChat
+    ? activeChat.phone ||
+      (!activeChat.isGroup && !activeChat.id.includes('@lid') ? stripJidSuffix(activeChat.id) : '')
+    : '';
 
   // The channel the active chat actually belongs to (multi-channel safe — not the rail selector).
   const activeChatSession = activeChat ? sessions.find(s => s.id === activeChat.sessionId) || null : null;
@@ -871,6 +882,10 @@ export function Chats() {
             stripJidSuffix(chat.id).includes(query);
 
           if (!matchesSearch) return false;
+          if (labelFilterId) {
+            const labels = chatLabelMap[`${chat.sessionId}::${chat.id}`] ?? [];
+            if (!labels.some(l => l.id === labelFilterId)) return false;
+          }
           if (inboxView === 'unread') return (chat.unreadCount || 0) > 0;
           if (inboxView === 'direct') return !chat.isGroup;
           if (inboxView === 'groups') return chat.isGroup;
@@ -881,7 +896,7 @@ export function Chats() {
           const bTime = b.timestamp || 0;
           return sortMode === 'recent' ? bTime - aTime : aTime - bTime;
         }),
-    [chats, searchQuery, inboxView, sortMode],
+    [chats, searchQuery, inboxView, sortMode, labelFilterId, chatLabelMap],
   );
 
   // Pre-compute per-message grouping (consecutive same-sender runs) and date separators in a single
@@ -1093,6 +1108,34 @@ export function Chats() {
               </button>
             </div>
 
+            {/* Label filter — only shown once at least one label exists. */}
+            {allLabels.length > 0 && (
+              <div className="chats-label-filter" role="group" aria-label="Filter by label">
+                <button
+                  type="button"
+                  className={`label-filter-chip${labelFilterId === '' ? ' active' : ''}`}
+                  onClick={() => setLabelFilterId('')}
+                >
+                  All
+                </button>
+                {allLabels.map(label => (
+                  <button
+                    key={label.id}
+                    type="button"
+                    className={`label-filter-chip${labelFilterId === label.id ? ' active' : ''}`}
+                    style={
+                      labelFilterId === label.id
+                        ? { background: label.color, borderColor: label.color, color: '#fff' }
+                        : { borderColor: label.color, color: label.color }
+                    }
+                    onClick={() => setLabelFilterId(id => (id === label.id ? '' : label.id))}
+                  >
+                    {label.name}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* Non-blocking notice: a selected channel failed to load — the rest still show. */}
             {failedChannelIds.length > 0 && (
               <div className="chats-channel-warning" role="status">
@@ -1135,6 +1178,7 @@ export function Chats() {
                       searchQuery={searchQuery}
                       yesterdayLabel={t('chats.yesterday')}
                       noMessageLabel={t('chats.noMessageYet')}
+                      labels={chatLabelMap[`${chat.sessionId}::${chat.id}`] ?? []}
                       onSelect={() => setActiveChat(chat)}
                     />
                   );

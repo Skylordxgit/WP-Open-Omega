@@ -165,6 +165,10 @@ export interface Chat {
   unreadCount: number;
   timestamp: number;
   lastMessage?: string;
+  /** Backend-resolved contact name (saved name or phone), when available. */
+  displayName?: string | null;
+  /** Backend-resolved phone digits, or null when unknown (e.g. unresolved @lid). */
+  phone?: string | null;
 }
 
 // Engine-neutral message types (mirrors the backend's IWhatsAppEngine MessageType). The backend
@@ -824,6 +828,48 @@ export interface DashboardAnalytics {
 export const dashboardApi = {
   getAnalytics: (date?: string) =>
     request<DashboardAnalytics>(`/dashboard/analytics${date ? `?date=${encodeURIComponent(date)}` : ''}`),
+};
+
+// =============================================================================
+// Chat Labels (persistent, DB-backed; scoped per session + chat)
+// =============================================================================
+
+export interface Label {
+  id: string;
+  name: string;
+  color: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LabelPayload {
+  name: string;
+  color?: string;
+}
+
+/** Map of `${sessionId}::${chatId}` → labels for a session. */
+export type SessionLabelMap = Record<string, Label[]>;
+
+export const labelApi = {
+  list: () => request<Label[]>('/labels'),
+  create: (data: LabelPayload) =>
+    request<Label>('/labels', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<LabelPayload>) =>
+    request<Label>(`/labels/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  delete: (id: string) => request<{ success: true }>(`/labels/${id}`, { method: 'DELETE' }),
+  assign: (sessionId: string, chatId: string, labelId: string) =>
+    request<unknown>('/labels/assign', { method: 'POST', body: JSON.stringify({ sessionId, chatId, labelId }) }),
+  unassign: (sessionId: string, chatId: string, labelId: string) =>
+    request<{ success: true }>('/labels/unassign', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId, chatId, labelId }),
+    }),
+  forChat: (sessionId: string, chatId: string) =>
+    request<Label[]>(`/labels/chat?sessionId=${encodeURIComponent(sessionId)}&chatId=${encodeURIComponent(chatId)}`),
+  forSession: (sessionId: string) => request<SessionLabelMap>(`/labels/session/${encodeURIComponent(sessionId)}`),
+  allAssignments: () => request<SessionLabelMap>('/labels/assignments'),
+  chatsForLabel: (labelId: string) =>
+    request<Array<{ sessionId: string; chatId: string }>>(`/labels/${labelId}/chats`),
 };
 
 // =============================================================================

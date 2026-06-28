@@ -283,6 +283,14 @@ export interface ChatSummary {
   unreadCount: number;
   timestamp: number;
   lastMessage?: string;
+  /**
+   * Resolved, human-facing contact name (saved name or phone). Optional: only
+   * populated where contact resolution runs (e.g. the stored-message fallback);
+   * the live engine path leaves it undefined and the UI resolves from `name`.
+   */
+  displayName?: string | null;
+  /** Resolved phone digits for the chat, or null/undefined when unknown. */
+  phone?: string | null;
 }
 
 /**
